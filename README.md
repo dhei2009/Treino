@@ -28,3 +28,5 @@ A porta é fornecida pela plataforma de hospedagem através de `PORT`.
 Este projeto precisa de um servidor Node.js. GitHub Pages não executa o `server.js`; por isso o repositório pode ficar no GitHub, mas a hospedagem do aplicativo completo deve ser um Web Service, como Render.
 
 Nunca coloque `SUPABASE_SERVICE_ROLE_KEY`, `SESSION_SECRET` ou outros segredos reais no GitHub.
+
+Cloudflare deployment
