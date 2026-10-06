@@ -1,11 +1,7 @@
-import 'dotenv/config';
 import express from 'express';
-import http from 'http';
-import { Server } from 'socket.io';
 import crypto from 'crypto';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
+import { httpServerHandler } from 'cloudflare:node';
 import {
   expiredSessionCookieHeader,
   openSession,
@@ -15,8 +11,7 @@ import {
   sessionCookieHeader
 } from './session-cookie.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.PORT || 3000);
+const PORT = 3000;
 const APP_ORIGIN = process.env.APP_ORIGIN || '';
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
@@ -50,8 +45,6 @@ const authClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 const DATABASE_SETUP_ERROR = 'A persistência no Supabase requer SUPABASE_SERVICE_ROLE_KEY no ambiente do servidor.';
 
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: false } });
 app.set('trust proxy', 1);
 app.use((req, _res, next) => {
   if (req.url === '/shape-together-api' || req.url.startsWith('/shape-together-api/')) {
@@ -60,7 +53,6 @@ app.use((req, _res, next) => {
   next();
 });
 app.use(express.json({ limit: '8mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
 
 const challengeStart = '2026-09-29';
 const challengeEnd = '2026-12-31';
@@ -238,17 +230,9 @@ async function groupIdForUser(userId) {
   const u = await getUserById(userId);
   return u?.active_group_id || null;
 }
-async function broadcastGroup(groupId) {
-  if (!groupId) return;
-  for (const s of io.sockets.sockets.values()) {
-    if (!s.userId) continue;
-    const gid = await groupIdForUser(s.userId).catch(() => null);
-    if (gid === groupId) {
-      const payload = await loadStateForUser(s.userId).catch(() => null);
-      if (payload) s.emit('state:update', payload);
-    }
-  }
-}
+// O Worker não usa Socket.IO. As mutações retornam o estado persistido mais recente;
+// a sincronização em tempo real será adicionada com Supabase Realtime em etapa própria.
+async function broadcastGroup(_groupId) {}
 
 async function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
   return await new Promise((resolve, reject) => crypto.scrypt(password, salt, 64, (err, derived) => {
@@ -682,34 +666,6 @@ app.post('/api/levels', requireAuth, async (_req, res) => {
   res.json({ ok: true });
 });
 
-io.use(async (socket, next) => {
-  try {
-    const encoded = readSessionCookie(socket.handshake.headers.cookie || '');
-    const session = openSession(encoded, SESSION_SECRET);
-    if (!session) return next(new Error('unauthorized'));
+app.listen(PORT);
 
-    if (session.kind === 'google') {
-      if (!session.accessToken || Number(session.expiresAt) <= Math.floor(Date.now() / 1000)) {
-        return next(new Error('unauthorized'));
-      }
-      const { data, error } = await authClient.auth.getUser(session.accessToken);
-      if (error || data?.user?.id !== session.authUserId) return next(new Error('unauthorized'));
-    }
-
-    const user = await getUserById(session.appUserId);
-    if (!user || (session.kind === 'google' && user.auth_user_id !== session.authUserId)) {
-      return next(new Error('unauthorized'));
-    }
-    socket.userId = user.id;
-    next();
-  } catch {
-    next(new Error('unauthorized'));
-  }
-});
-
-io.on('connection', async socket => {
-  const payload = await loadStateForUser(socket.userId).catch(() => null);
-  if (payload) socket.emit('state:update', payload);
-});
-
-server.listen(PORT, () => console.info(`Shape Together online on port ${PORT}`));
+export default httpServerHandler({ port: PORT });
