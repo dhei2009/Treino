@@ -29,4 +29,4 @@ Este projeto precisa de um servidor Node.js. GitHub Pages não executa o `server
 
 Nunca coloque `SUPABASE_SERVICE_ROLE_KEY`, `SESSION_SECRET` ou outros segredos reais no GitHub.
 
-Cloudflare deployment
+Olá mundo 
