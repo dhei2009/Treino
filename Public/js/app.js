@@ -97,7 +97,7 @@ function canEdit(date,memberId){return memberId===currentUser?.id&&date>=START&&
 function progress(id){const days=state.days[id]||{},vals=challengeDates().map(d=>days[d]?.status).filter(Boolean).map(s=>STATUS[s].value);if(!vals.length)return{score:0,avg:0,registered:0};const avg=vals.reduce((a,b)=>a+b,0)/vals.length;return{score:Math.round(avg*10),avg,registered:vals.length}}
 function weekDates(){return challengeDates().slice(-7)}
 function weekProgress(id){const days=state.days[id]||{};return weekDates().map(date=>{const status=days[date]?.status||null;return{date,status,value:status?STATUS[status].value:null,registered:Boolean(status)}})}
-function weekStats(id){const points=weekProgress(id),weekSize=Math.max(1,points.length),registered=points.filter(p=>p.registered),total=registered.reduce((sum,p)=>sum+p.value,0),score=Math.round((points.reduce((sum,p)=>sum+(p.registered?p.value:0),0)/(weekSize*10))*100);return{points,total,score,avg:registered.length?total/registered.length:0,registered:registered.length}}
+function weekStats(id){const points=weekProgress(id),weekSize=Math.max(1,points.length),registered=points.filter(p=>p.registered),total=registered.reduce((sum,p)=>sum+p.value,0);const score=Math.round((points.reduce((sum,p)=>sum+(p.registered?p.value:0),0)/(weekSize*10))*100);return{points,total,score,avg:registered.length?total/registered.length:0,registered:registered.length}}
 function monthStats(id){const ds=Object.values(state.days[id]||{});return{green:ds.filter(x=>x.status==='green').length,orange:ds.filter(x=>x.status==='orange').length,blue:ds.filter(x=>x.status==='blue').length,red:ds.filter(x=>x.status==='red').length}}
 function getPhoto(u){const v=u?.avatar;return typeof v==='string'&&v.trim()?v.trim():''}
 function avatarHTML(u,i){const photo=getPhoto(u);return `<div class="avatar${photo?' has-photo':''}" style="background:${memberColor(u,i)};overflow:hidden">${photo?`<img src="${esc(photo)}" alt="" loading="eager">`:esc(u?.initials||'P')}</div>`}
@@ -126,38 +126,51 @@ function hideSaveOverlay(){const el=$('saveOverlay');if(!el)return;el.classList.
 function isImageDataUrl(v){return typeof v==='string'&&/^data:image\/(?:jpeg|jpg|png|webp);base64,/i.test(v)}
 async function saveDay(){const target=selectedCalendarMember(),date=selectedDate,status=selectedStatus;if(savingDay||!date||!status||!canEdit(date,target.id))return;const note=$('dayNote').value.trim();const previous=state.days?.[target.id]?.[date]?{...state.days[target.id][date]}:null;savingDay=true;showSaveOverlay();const btn=$('saveDay');if(btn){btn.disabled=true;btn.textContent='Salvando…';btn.setAttribute('aria-busy','true')}state.days[target.id]||={};state.days[target.id][date]={status,note,updatedAt:new Date().toISOString()};try{if(online){const r=await api('/api/day',{method:'POST',body:JSON.stringify({date,status,note})});if(r.state)state=r.state;closeDay();renderApp();toast('Dia salvo.');return}writeLocal();closeDay();renderApp();toast('Dia salvo neste dispositivo.')}catch(e){state.days[target.id]||={};if(previous)state.days[target.id][date]=previous;else delete state.days[target.id][date];renderApp();toast(e.message||'Não foi possível salvar o dia.')}finally{savingDay=false;hideSaveOverlay()}}
 async function deleteDay(){const target=selectedCalendarMember();if(!selectedDate||!canEdit(selectedDate,target.id))return;if(online){try{const r=await api('/api/day/'+selectedDate,{method:'DELETE'});if(r.state)state=r.state;closeDay();renderApp();toast('Registro apagado.');return}catch(e){toast(e.message);return}}delete state.days[target.id]?.[selectedDate];writeLocal();closeDay();renderApp();toast('Registro apagado.')}
-function weekDayLabel(date){const d=new Date(date+'T00:00:00');return d.toLocaleDateString('pt-BR',{weekday:'short'}).replace('.','').slice(0,3)}
-function weekDayNumber(date){return date.slice(8)}
-function drawWeekChart(container,id){
- const stats=weekStats(id),points=stats.points,n=Math.max(1,points.length),W=800,H=344,ml=46,mr=18,mt=24,mb=62,plotW=W-ml-mr,plotH=H-mt-mb,levels=[0,3,6,10];
- const x=i=>n===1?ml+plotW/2:ml+(plotW*i/(n-1));
- const y=v=>mt+plotH-(Math.max(0,Math.min(10,v))/10)*plotH;
- let grid='';
- levels.forEach(v=>{const yy=y(v);grid+=`<line x1="${ml}" y1="${yy}" x2="${W-mr}" y2="${yy}" class="week-grid"/><text x="${ml-11}" y="${yy+4}" text-anchor="end" class="week-y">${v}</text>`});
- let xlabels='';
- points.forEach((p,i)=>{const xx=x(i),active=p.date===today();xlabels+=`<text x="${xx}" y="${H-30}" text-anchor="middle" class="week-x ${active?'active':''}">${weekDayLabel(p.date)}</text><text x="${xx}" y="${H-14}" text-anchor="middle" class="week-date ${active?'active':''}">${weekDayNumber(p.date)}</text>`;if(active)xlabels+=`<line x1="${xx}" y1="${mt}" x2="${xx}" y2="${mt+plotH}" class="week-today-line"/>`});
- let segments='',circles='';
- let run=[];
- const flush=()=>{if(run.length>=2){segments+=`<path d="${run.map((p,i)=>(i?'L':'M')+x(p.i)+','+y(p.value)).join(' ')}" class="week-line"/>`}run=[]};
- points.forEach((p,i)=>{if(!p.registered){flush();return;}run.push({i,value:p.value});});flush();
- points.forEach((p,i)=>{const xx=x(i);if(!p.registered){circles+=`<circle cx="${xx}" cy="${y(0)}" r="5" class="week-point unregistered"><title>${p.date.split('-').reverse().join('/')} · Sem registro</title></circle>`;return;}const yy=y(p.value),color=p.status==='green'?'var(--success)':p.status==='orange'?'var(--warn)':p.status==='blue'?'var(--rest)':'var(--danger)';circles+=`<circle cx="${xx}" cy="${yy}" r="6.5" fill="var(--panel)" stroke="${color}" stroke-width="3" class="week-point"><title>${p.date.split('-').reverse().join('/')} · ${esc(STATUS[p.status].label)} · ${p.value}/10</title></circle><circle cx="${xx}" cy="${yy}" r="2.5" fill="${color}" class="week-point-core" aria-hidden="true"/>`});
- container.innerHTML=`<svg class="week-chart-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Progressão dos últimos sete dias conforme a qualidade do treino"><defs><filter id="weekPointGlow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>${grid}${xlabels}${segments}${circles}</svg>`;
-}
 function renderProgress(){
  const me=current(),others=state.users.filter(u=>u.id!==me.id);
  if(compareIds.size===0)others.forEach(u=>compareIds.add(u.id));
  const p=progress(me.id),w=weekStats(me.id),c=memberColor(me,state.users.findIndex(x=>x.id===me.id));
  const dayCards=w.points.map(pt=>{const label=pt.registered?STATUS[pt.status].label:'Sem registro';const tone=pt.registered?pt.status:'empty';const score=pt.registered?pt.value:'—';return `<article class="week-day ${tone}"><div class="week-day-top"><span>${weekDayLabel(pt.date)}</span><b>${weekDayNumber(pt.date)}</b></div><div class="week-day-score">${score}<small>/10</small></div><div class="week-day-label">${esc(label)}</div></article>`}).join('');
- $('page-progress').innerHTML=`<div class="head"><div><div class="eyebrow">Progressão</div><h1>Seu mapa, junto com os deles.</h1><p>A semana mostra a qualidade de cada registro. Quanto melhor o treino, mais alto o ponto.</p></div></div><div class="progress"><section class="card week-progress-card">
- <div class="week-head"><div><div class="eyebrow">Progressão da semana</div><h2>O seu ritmo nos últimos 7 dias.</h2><p>O gráfico usa os mesmos pesos do mapa: 0 para não treinou, 3 para descanso, 6 para treino mediano e 10 para treinou bem.</p></div><div class="week-score"><span>SEMANA</span><b>${w.score}</b><small>/100 de ritmo</small></div></div>
- <div class="week-summary"><div class="week-summary-item"><span>Média dos registros</span><b>${w.avg.toFixed(1).replace('.',',')}<small>/10</small></b></div><div class="week-summary-item"><span>Dias registrados</span><b>${w.registered}<small>/7</small></b></div><div class="week-summary-item"><span>Melhor resultado</span><b>${w.points.reduce((m,p)=>p.registered?Math.max(m,p.value):m,0)}<small>/10</small></b></div></div>
+ $('page-progress').innerHTML=`<div class="head"><div><div class="eyebrow">Progressão</div><h1>Seu progresso, dia após dia.</h1><p>O histórico mostra cada dia desde o início do desafio. Os últimos 7 dias ficam destacados em verde para você enxergar a semana atual sem perder o restante da evolução.</p></div></div><div class="progress"><section class="card week-progress-card">
+ <div class="week-head"><div><div class="eyebrow">Histórico do desafio</div><h2>Do primeiro ao último dia.</h2><p>Cada ponto usa exatamente o valor do calendário: 0 para não treinou, 3 para descanso, 6 para treino mediano e 10 para treinou bem. Dias sem registro aparecem separados para não serem confundidos com nota 0.</p></div><div class="week-score"><span>SEMANA</span><b>${w.avg.toFixed(1).replace('.',',')}</b><small>/10 de média · ${w.registered}/7 dias</small></div></div>
+ <div class="week-summary"><div class="week-summary-item"><span>Média dos registros</span><b>${w.avg.toFixed(1).replace('.',',')}<small>/10</small></b></div><div class="week-summary-item"><span>Dias registrados</span><b>${w.registered}<small>/7</small></b></div><div class="week-summary-item"><span>Melhor resultado</span><b>${w.points.reduce((m,pt)=>pt.registered?Math.max(m,pt.value):m,0)}<small>/10</small></b></div></div>
  <div id="weekChart" class="week-chart"></div>
  <div class="week-days" aria-label="Detalhes da semana">${dayCards}</div>
  <div class="week-scale"><span><i class="red"></i>0 · Não treinou</span><span><i class="blue"></i>3 · Descanso</span><span><i class="orange"></i>6 · Treino mediano</span><span><i class="green"></i>10 · Treinou bem</span><span class="week-scale-note">Sem registro não entra como treino.</span></div>
  </section>
  <div class="progress-top"><div class="legend-map"><span class="map-chip" style="border-color:${c};color:${c}"><i style="width:8px;height:8px;border-radius:50%;background:${c}"></i>Você</span>${others.map((u)=>{const cc=memberColor(u,state.users.findIndex(x=>x.id===u.id));return `<label class="map-chip"><input type="checkbox" data-compare="${u.id}" ${compareIds.has(u.id)?'checked':''}><i style="width:8px;height:8px;border-radius:50%;background:${cc}"></i>${esc(u.name)}</label>`}).join('')}</div></div>
- <div class="card map-box" id="mapBox"></div><div class="card progress-bottom"><div><div class="eyebrow">Agora</div><div class="progress-score">${p.score}<small>/100</small></div><div class="scale"><span>🔴 0 · não treinou</span><span>🔵 3 · descanso</span><span>🟠 6 · treino mediano</span><span>🟢 10 · treinou bem</span></div></div><span class="pill">${p.registered} dias registrados</span></div></div>`;
+ <div class="card map-box" id="mapBox"></div><div class="card progress-bottom"><div><div class="eyebrow">Média do desafio</div><div class="progress-score">${p.avg.toFixed(1).replace('.',',')}<small>/10</small></div><div class="scale"><span>🔴 0 · não treinou</span><span>🔵 3 · descanso</span><span>🟠 6 · treino mediano</span><span>🟢 10 · treinou bem</span></div></div><span class="pill">${p.registered} dias registrados</span></div></div>`;
  drawWeekChart($('weekChart'),me.id);drawMap($('mapBox'),me.id,[...compareIds]);document.querySelectorAll('[data-compare]').forEach(x=>x.onchange=()=>{x.checked?compareIds.add(x.dataset.compare):compareIds.delete(x.dataset.compare);drawMap($('mapBox'),me.id,[...compareIds])})
+}
+function drawWeekChart(container,id){
+ const days=state.days[id]||{},dates=challengeDates(),points=dates.map(date=>{const status=days[date]?.status||null;return{date,status,value:status?STATUS[status].value:null,registered:Boolean(status)}}),n=Math.max(1,points.length);
+ const W=Math.max(900,90+n*30),H=360,ml=48,mr=26,mt=34,mb=74,plotW=W-ml-mr,plotH=H-mt-mb,step=n===1?0:plotW/(n-1),levels=[0,3,6,10];
+ const x=i=>n===1?ml+plotW/2:ml+step*i;
+ const y=v=>mt+plotH-(Math.max(0,Math.min(10,v))/10)*plotH;
+ const weekStart=Math.max(0,n-7),weekEnd=n-1;
+ const statusColor={red:'var(--danger)',blue:'var(--rest)',orange:'var(--warn)',green:'var(--success)'};
+ let grid='',labels='',historySegments='',weekSegments='',pointsSvg='';
+ levels.forEach(v=>{const yy=y(v);grid+=`<line x1="${ml}" y1="${yy}" x2="${W-mr}" y2="${yy}" class="week-grid"/><text x="${ml-11}" y="${yy+4}" text-anchor="end" class="week-y">${v}</text>`});
+ const bandX=n===1?ml-18:Math.max(ml,x(weekStart)-step/2),bandRight=n===1?ml+18:Math.min(W-mr,x(weekEnd)+step/2);
+ grid+=`<rect x="${bandX}" y="${mt}" width="${Math.max(0,bandRight-bandX)}" height="${plotH}" rx="14" class="week-focus-band" fill="var(--success)" fill-opacity=".07"/><text x="${bandX+10}" y="${mt-10}" class="week-y" fill="var(--success)" font-size="8" font-weight="950">ÚLTIMOS 7 DIAS</text>`;
+ const flush=(arr,week)=>{if(arr.length<2)return;const d=arr.map((p,i)=>(i?'L':'M')+x(p.i)+','+y(p.value)).join(' ');if(week)weekSegments+=`<path d="${d}" class="week-line-week" fill="none" stroke="var(--success)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;else historySegments+=`<path d="${d}" class="week-line-history"/>`};
+ let run=[],weekRun=[];
+ points.forEach((p,i)=>{
+   if(!p.registered){flush(run,false);run=[];flush(weekRun,true);weekRun=[];return;}
+   run.push({i,value:p.value});
+   if(i>=weekStart)weekRun.push({i,value:p.value});
+   else if(weekRun.length){flush(weekRun,true);weekRun=[];}
+ });
+ flush(run,false);flush(weekRun,true);
+ points.forEach((p,i)=>{
+   const xx=x(i),active=p.date===today(),d=p.date.split('-').reverse().join('/');
+   if(active)labels+=`<line x1="${xx}" y1="${mt}" x2="${xx}" y2="${mt+plotH}" class="week-today-line"/>`;
+   if(p.registered){const color=statusColor[p.status]||'var(--line2)';pointsSvg+=`<circle cx="${xx}" cy="${y(p.value)}" r="7" fill="var(--panel)" stroke="${color}" stroke-width="3" class="week-point"><title>${d} · ${esc(STATUS[p.status].label)} · ${p.value}/10</title></circle><circle cx="${xx}" cy="${y(p.value)}" r="2.6" fill="${color}" class="week-point-core" aria-hidden="true"/>`}
+   else pointsSvg+=`<circle cx="${xx}" cy="${y(0)}" r="5" fill="var(--panel)" stroke="var(--line2)" stroke-width="2" vector-effect="non-scaling-stroke" class="week-point-unregistered"><title>${d} · Sem registro</title></circle>`;
+   const showDate=n<=28||i===0||i===n-1||i%7===0||active;
+   if(showDate){const dt=new Date(p.date+'T00:00:00'),dow=dt.toLocaleDateString('pt-BR',{weekday:'short'}).replace('.','').slice(0,3);labels+=`<text x="${xx}" y="${H-31}" text-anchor="middle" class="week-x ${active?'active':''}">${dow}</text><text x="${xx}" y="${H-13}" text-anchor="middle" class="week-date ${active?'active':''}">${p.date.slice(8)}</text>`}
+ });
+ container.style.overflowX='auto';container.style.overflowY='hidden';container.innerHTML=`<svg class="week-chart-svg week-chart-full" viewBox="0 0 ${W} ${H}" style="width:${W}px;min-width:${W}px;height:auto" role="img" aria-label="Progressão diária desde o início do desafio até hoje. Os últimos sete dias ficam destacados em verde."><defs><filter id="weekPointGlowFull"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>${grid}${historySegments}${weekSegments}${labels}${pointsSvg}</svg>`;
 }
 function drawMap(container,primaryId,otherIds){
  const dates=challengeDates(),n=Math.max(1,dates.length),size=560,c=280,R=214,step=2*Math.PI/n;
@@ -230,11 +243,7 @@ function drawMap(container,primaryId,otherIds){
  state.users.filter(function(u){return u.id!==primaryId&&otherIds.includes(u.id);}).forEach(function(u){draw(u,false);});
  const primary=state.users.find(function(u){return u.id===primaryId;})||current();
  draw(primary,true);
- const score=progress(primary.id).score;
- const dash=Math.max(1,Math.round(score*.62));
- s+='<polygon points="'+hexGrid(40)+'" fill="var(--panel)" stroke="var(--accent)" stroke-width="1.5" opacity=".97"/>'+
-    '<polygon points="'+hexGrid(33)+'" fill="none" stroke="var(--accent)" stroke-width="4" stroke-dasharray="'+dash+' 200" stroke-linecap="round" transform="rotate(-90 '+c+' '+c+')" opacity=".28"/>'+
-    '<text x="'+c+'" y="'+(c-1)+'" text-anchor="middle" class="map-center-score">'+score+'<tspan class="map-center-sub" x="'+c+'" dy="13">/100</tspan></text></svg>';
+ s+='</svg>';
  container.innerHTML=s;
 }
 function renderNotes(){const all=Object.entries(state.days).flatMap(([uid,ds])=>Object.entries(ds).filter(([,v])=>v.note).map(([date,v])=>({uid,date,...v}))).sort((a,b)=>b.date.localeCompare(a.date));$('page-notes').innerHTML=`<div class="head"><div><div class="eyebrow">Anotações</div><h1>O que aconteceu.</h1><p>Um histórico simples para lembrar dos dias importantes do grupo.</p></div></div><div class="card"><div class="note-filter"><button class="soft active" data-note-filter="all">Todas</button>${state.users.map(u=>`<button class="soft" data-note-filter="${u.id}">${esc(u.name.split(' ')[0])}</button>`).join('')}</div><div id="notesList" class="notes"></div></div>`;const list=$('notesList');const draw=f=>{const notes=f==='all'?all:all.filter(n=>n.uid===f);list.innerHTML=notes.length?notes.map(n=>{const u=state.users.find(x=>x.id===n.uid);return `<article class="note"><div class="note-head"><div style="display:flex;align-items:center;gap:8px"><span class="group-avatar" style="width:27px;height:27px;background:${memberColor(u,state.users.findIndex(x=>x.id===u.id))}">${getPhoto(u)?`<img src="${esc(getPhoto(u))}" alt="" loading="eager">`:esc(u?.initials||'P')}</span><b>${esc(u?.name||'Pessoa')}</b></div><span>${esc(n.date.split('-').reverse().join('/'))}</span></div><p>${esc(n.note)}</p></article>`}).join(''):'<div style="color:var(--muted);font-size:12px;padding:8px 0">Ainda não há anotações para este filtro.</div>'};draw('all');document.querySelectorAll('[data-note-filter]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-note-filter]').forEach(x=>x.classList.toggle('active',x===b));draw(b.dataset.noteFilter)})}
