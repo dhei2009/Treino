@@ -1,33 +1,18 @@
-# Shape Together
+# Shape Together — pacote consolidado
 
-Versão atual do aplicativo preparada para hospedagem independente.
+Este pacote contém somente os arquivos que precisam ser substituídos nesta correção.
 
-## Arquitetura real
+## Arquivos
 
-- `server.js`: servidor Node.js/Express e API.
-- `public/index.html`: interface atual do Shape Together.
-- `public/favicon.svg` e `public/robots.txt`: arquivos públicos.
-- `session-cookie.js`: sessão persistente e segura.
-- `supabase/schema.sql`: estrutura do banco já usada pelo projeto.
+- `Public/index.html` — tela inicial limpa; Google é a única entrada visível; Socket.IO removido.
+- `Public/js/app.js` — sessão online consolidada, `weekDates()` restaurado, login legado e Socket.IO removidos do frontend, sem apagar dados locais existentes.
+- `Public/css/style.css` — versão consolidada com histórico diário, destaque verde dos últimos 7 dias e bloqueio visual durante o salvamento.
+- `.gitignore` — evita subir secrets e arquivos locais.
 
-O aplicativo depende do Supabase para autenticação/dados/Storage e usa Socket.IO para sincronização em tempo real.
+## Importante
 
-## Executar
+O banco Supabase **não deve ser apagado nem recriado**. Este pacote não contém `schema.sql` justamente para evitar qualquer substituição destrutiva.
 
-Configure as variáveis de ambiente do `.env.example` e execute:
+O `server.js` também não é substituído neste pacote: as rotas legadas permanecem no backend por segurança de compatibilidade, mas não são mais apresentadas no frontend.
 
-```text
-npm install
-npm start
-```
-
-A porta é fornecida pela plataforma de hospedagem através de `PORT`.
-
-## Deploy
-
-Este projeto precisa de um servidor Node.js. GitHub Pages não executa o `server.js`; por isso o repositório pode ficar no GitHub, mas a hospedagem do aplicativo completo deve ser um Web Service, como Render.
-
-Nunca coloque `SUPABASE_SERVICE_ROLE_KEY`, `SESSION_SECRET` ou outros segredos reais no GitHub.
-
-Olá mundo 
-2 teste 
+Depois da substituição, apague manualmente o arquivo `render.yaml` do repositório, pois o projeto atual usa Cloudflare Worker e não Render.
