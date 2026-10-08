@@ -3,7 +3,7 @@ const LOCAL_KEY='shape_together_local_v6',THEME_KEY='shape_together_theme_v7',AC
 const DEFAULT_ACCENTS={light:'#11120F',dark:'#F5F3ED'};
 const COLORS=['#4C7DFF','#E6536F','#19A779','#8A63D2','#E6A23C','#1F9CAA','#D84B9B'];
 const STATUS={red:{label:'Não treinou',desc:'Sem treino',value:0},blue:{label:'Descanso',desc:'Descanso',value:3},orange:{label:'Treinou, mas não foi tão bom',desc:'Abaixo do esperado',value:6},green:{label:'Treinou bem',desc:'Treino bom',value:10}};
-const PAGES={home:['Início','Sua visão geral'],calendar:['Calendário','Registre cada dia'],progress:['Progressão','Mapa pelo calendário'],notes:['Anotações','Histórico do grupo'],group:['Grupo','Pessoas e convite']};
+const PAGES={home:['Início','Sua visão geral'],calendar:['Calendário','Registre cada dia'],progress:['Progressão','Histórico diário'],notes:['Anotações','Histórico do grupo'],group:['Grupo','Pessoas e convite']};
 const NAV=[['home','Início','home'],['calendar','Calendário','calendar'],['progress','Progressão','chart'],['notes','Anotações','notes'],['group','Grupo','group']];
 let online=false,googleEnabled=false,socket=null,currentUser=null,state=null,page='home',calendarDate=new Date(),calendarMemberId=null,selectedDate=null,selectedStatus=null,appearanceTrigger=null,compareIds=new Set(),savingDay=false,savingProfile=false;
 const $=id=>document.getElementById(id);
@@ -95,9 +95,6 @@ function challenge(){const s=new Date(2026,8,29),t=dateOnly(new Date()),e=new Da
 function challengeDates(){const c=challenge(),arr=[];for(let i=0;i<c.elapsed;i++){const d=new Date(c.start);d.setDate(d.getDate()+i);arr.push(iso(d.getFullYear(),d.getMonth(),d.getDate()))}return arr}
 function canEdit(date,memberId){return memberId===currentUser?.id&&date>=START&&date<=today()}
 function progress(id){const days=state.days[id]||{},vals=challengeDates().map(d=>days[d]?.status).filter(Boolean).map(s=>STATUS[s].value);if(!vals.length)return{score:0,avg:0,registered:0};const avg=vals.reduce((a,b)=>a+b,0)/vals.length;return{score:Math.round(avg*10),avg,registered:vals.length}}
-function weekDates(){return challengeDates().slice(-7)}
-function weekProgress(id){const days=state.days[id]||{};return weekDates().map(date=>{const status=days[date]?.status||null;return{date,status,value:status?STATUS[status].value:null,registered:Boolean(status)}})}
-function weekStats(id){const points=weekProgress(id),weekSize=Math.max(1,points.length),registered=points.filter(p=>p.registered),total=registered.reduce((sum,p)=>sum+p.value,0);const score=Math.round((points.reduce((sum,p)=>sum+(p.registered?p.value:0),0)/(weekSize*10))*100);return{points,total,score,avg:registered.length?total/registered.length:0,registered:registered.length}}
 function monthStats(id){const ds=Object.values(state.days[id]||{});return{green:ds.filter(x=>x.status==='green').length,orange:ds.filter(x=>x.status==='orange').length,blue:ds.filter(x=>x.status==='blue').length,red:ds.filter(x=>x.status==='red').length}}
 function getPhoto(u){const v=u?.avatar;return typeof v==='string'&&v.trim()?v.trim():''}
 function avatarHTML(u,i){const photo=getPhoto(u);return `<div class="avatar${photo?' has-photo':''}" style="background:${memberColor(u,i)};overflow:hidden">${photo?`<img src="${esc(photo)}" alt="" loading="eager">`:esc(u?.initials||'P')}</div>`}
@@ -126,51 +123,89 @@ function hideSaveOverlay(){const el=$('saveOverlay');if(!el)return;el.classList.
 function isImageDataUrl(v){return typeof v==='string'&&/^data:image\/(?:jpeg|jpg|png|webp);base64,/i.test(v)}
 async function saveDay(){const target=selectedCalendarMember(),date=selectedDate,status=selectedStatus;if(savingDay||!date||!status||!canEdit(date,target.id))return;const note=$('dayNote').value.trim();const previous=state.days?.[target.id]?.[date]?{...state.days[target.id][date]}:null;savingDay=true;showSaveOverlay();const btn=$('saveDay');if(btn){btn.disabled=true;btn.textContent='Salvando…';btn.setAttribute('aria-busy','true')}state.days[target.id]||={};state.days[target.id][date]={status,note,updatedAt:new Date().toISOString()};try{if(online){const r=await api('/api/day',{method:'POST',body:JSON.stringify({date,status,note})});if(r.state)state=r.state;closeDay();renderApp();toast('Dia salvo.');return}writeLocal();closeDay();renderApp();toast('Dia salvo neste dispositivo.')}catch(e){state.days[target.id]||={};if(previous)state.days[target.id][date]=previous;else delete state.days[target.id][date];renderApp();toast(e.message||'Não foi possível salvar o dia.')}finally{savingDay=false;hideSaveOverlay()}}
 async function deleteDay(){const target=selectedCalendarMember();if(!selectedDate||!canEdit(selectedDate,target.id))return;if(online){try{const r=await api('/api/day/'+selectedDate,{method:'DELETE'});if(r.state)state=r.state;closeDay();renderApp();toast('Registro apagado.');return}catch(e){toast(e.message);return}}delete state.days[target.id]?.[selectedDate];writeLocal();closeDay();renderApp();toast('Registro apagado.')}
-function renderProgress(){
- const me=current(),others=state.users.filter(u=>u.id!==me.id);
- if(compareIds.size===0)others.forEach(u=>compareIds.add(u.id));
- const p=progress(me.id),w=weekStats(me.id),c=memberColor(me,state.users.findIndex(x=>x.id===me.id));
- const dayCards=w.points.map(pt=>{const label=pt.registered?STATUS[pt.status].label:'Sem registro';const tone=pt.registered?pt.status:'empty';const score=pt.registered?pt.value:'—';return `<article class="week-day ${tone}"><div class="week-day-top"><span>${weekDayLabel(pt.date)}</span><b>${weekDayNumber(pt.date)}</b></div><div class="week-day-score">${score}<small>/10</small></div><div class="week-day-label">${esc(label)}</div></article>`}).join('');
- $('page-progress').innerHTML=`<div class="head"><div><div class="eyebrow">Progressão</div><h1>Seu progresso, dia após dia.</h1><p>O histórico mostra cada dia desde o início do desafio. Os últimos 7 dias ficam destacados em verde para você enxergar a semana atual sem perder o restante da evolução.</p></div></div><div class="progress"><section class="card week-progress-card">
- <div class="week-head"><div><div class="eyebrow">Histórico do desafio</div><h2>Do primeiro ao último dia.</h2><p>Cada ponto usa exatamente o valor do calendário: 0 para não treinou, 3 para descanso, 6 para treino mediano e 10 para treinou bem. Dias sem registro aparecem separados para não serem confundidos com nota 0.</p></div><div class="week-score"><span>SEMANA</span><b>${w.avg.toFixed(1).replace('.',',')}</b><small>/10 de média · ${w.registered}/7 dias</small></div></div>
- <div class="week-summary"><div class="week-summary-item"><span>Média dos registros</span><b>${w.avg.toFixed(1).replace('.',',')}<small>/10</small></b></div><div class="week-summary-item"><span>Dias registrados</span><b>${w.registered}<small>/7</small></b></div><div class="week-summary-item"><span>Melhor resultado</span><b>${w.points.reduce((m,pt)=>pt.registered?Math.max(m,pt.value):m,0)}<small>/10</small></b></div></div>
- <div id="weekChart" class="week-chart"></div>
- <div class="week-days" aria-label="Detalhes da semana">${dayCards}</div>
- <div class="week-scale"><span><i class="red"></i>0 · Não treinou</span><span><i class="blue"></i>3 · Descanso</span><span><i class="orange"></i>6 · Treino mediano</span><span><i class="green"></i>10 · Treinou bem</span><span class="week-scale-note">Sem registro não entra como treino.</span></div>
- </section>
- <div class="progress-top"><div class="legend-map"><span class="map-chip" style="border-color:${c};color:${c}"><i style="width:8px;height:8px;border-radius:50%;background:${c}"></i>Você</span>${others.map((u)=>{const cc=memberColor(u,state.users.findIndex(x=>x.id===u.id));return `<label class="map-chip"><input type="checkbox" data-compare="${u.id}" ${compareIds.has(u.id)?'checked':''}><i style="width:8px;height:8px;border-radius:50%;background:${cc}"></i>${esc(u.name)}</label>`}).join('')}</div></div>
- <div class="card map-box" id="mapBox"></div><div class="card progress-bottom"><div><div class="eyebrow">Média do desafio</div><div class="progress-score">${p.avg.toFixed(1).replace('.',',')}<small>/10</small></div><div class="scale"><span>🔴 0 · não treinou</span><span>🔵 3 · descanso</span><span>🟠 6 · treino mediano</span><span>🟢 10 · treinou bem</span></div></div><span class="pill">${p.registered} dias registrados</span></div></div>`;
- drawWeekChart($('weekChart'),me.id);drawMap($('mapBox'),me.id,[...compareIds]);document.querySelectorAll('[data-compare]').forEach(x=>x.onchange=()=>{x.checked?compareIds.add(x.dataset.compare):compareIds.delete(x.dataset.compare);drawMap($('mapBox'),me.id,[...compareIds])})
+function progressHistoryDates(id){
+ const days=state.days[id]||{},dates=challengeDates(),registered=dates.filter(d=>Boolean(days[d]?.status));
+ if(!registered.length)return[];
+ const first=registered[0],last=registered[registered.length-1],start=dates.indexOf(first),end=dates.indexOf(last);
+ return dates.slice(Math.max(0,start),end+1);
+}
+function historyPoints(id){
+ const days=state.days[id]||{};return progressHistoryDates(id).map(date=>{const status=days[date]?.status||null;return{date,status,value:status?STATUS[status].value:null,registered:Boolean(status)}})
+}
+function weekPoints(id){
+ const days=state.days[id]||{},dates=weekDates();return dates.map(date=>{const status=days[date]?.status||null;return{date,status,value:status?STATUS[status].value:null,registered:Boolean(status)}})
+}
+function weekStats(id){
+ const points=weekPoints(id),registered=points.filter(p=>p.registered),total=registered.reduce((sum,p)=>sum+p.value,0);
+ return{points,total,avg:registered.length?total/registered.length:0,registered:registered.length}
 }
 function drawWeekChart(container,id){
- const days=state.days[id]||{},dates=challengeDates(),points=dates.map(date=>{const status=days[date]?.status||null;return{date,status,value:status?STATUS[status].value:null,registered:Boolean(status)}}),n=Math.max(1,points.length);
- const W=Math.max(900,90+n*30),H=360,ml=48,mr=26,mt=34,mb=74,plotW=W-ml-mr,plotH=H-mt-mb,step=n===1?0:plotW/(n-1),levels=[0,3,6,10];
- const x=i=>n===1?ml+plotW/2:ml+step*i;
+ const points=historyPoints(id);
+ if(!points.length){
+   container.innerHTML=`<div class="progress-empty"><strong>Ainda não há registros suficientes.</strong><span>Marque pelo menos um dia no calendário para ver seu progresso aqui.</span></div>`;
+   return;
+ }
+ const n=points.length,W=Math.max(920,78+(n-1)*54),H=356,ml=50,mr=26,mt=38,mb=76,plotW=W-ml-mr,plotH=H-mt-mb;
+ const x=i=>n===1?ml+plotW/2:ml+(plotW*i/(n-1));
  const y=v=>mt+plotH-(Math.max(0,Math.min(10,v))/10)*plotH;
- const weekStart=Math.max(0,n-7),weekEnd=n-1;
+ const todayDate=today();
+ const weekStart=new Date(todayDate+'T00:00:00');weekStart.setDate(weekStart.getDate()-6);
+ const weekStartDate=iso(weekStart.getFullYear(),weekStart.getMonth(),weekStart.getDate());
+ const inCurrentWeek=p=>p.date>=weekStartDate&&p.date<=todayDate;
  const statusColor={red:'var(--danger)',blue:'var(--rest)',orange:'var(--warn)',green:'var(--success)'};
  let grid='',labels='',historySegments='',weekSegments='',pointsSvg='';
- levels.forEach(v=>{const yy=y(v);grid+=`<line x1="${ml}" y1="${yy}" x2="${W-mr}" y2="${yy}" class="week-grid"/><text x="${ml-11}" y="${yy+4}" text-anchor="end" class="week-y">${v}</text>`});
- const bandX=n===1?ml-18:Math.max(ml,x(weekStart)-step/2),bandRight=n===1?ml+18:Math.min(W-mr,x(weekEnd)+step/2);
- grid+=`<rect x="${bandX}" y="${mt}" width="${Math.max(0,bandRight-bandX)}" height="${plotH}" rx="14" class="week-focus-band" fill="var(--success)" fill-opacity=".07"/><text x="${bandX+10}" y="${mt-10}" class="week-y" fill="var(--success)" font-size="8" font-weight="950">ÚLTIMOS 7 DIAS</text>`;
- const flush=(arr,week)=>{if(arr.length<2)return;const d=arr.map((p,i)=>(i?'L':'M')+x(p.i)+','+y(p.value)).join(' ');if(week)weekSegments+=`<path d="${d}" class="week-line-week" fill="none" stroke="var(--success)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;else historySegments+=`<path d="${d}" class="week-line-history"/>`};
+ [0,3,6,10].forEach(v=>{const yy=y(v);grid+=`<line x1="${ml}" y1="${yy}" x2="${W-mr}" y2="${yy}" class="week-grid"/><text x="${ml-11}" y="${yy+4}" text-anchor="end" class="week-y">${v}</text>`});
+ const weekIndexes=points.map((p,i)=>inCurrentWeek(p)?i:null).filter(i=>i!==null);
+ if(weekIndexes.length){
+   const first=weekIndexes[0],last=weekIndexes[weekIndexes.length-1],step=n===1?0:plotW/(n-1),bandX=n===1?ml-22:Math.max(ml,x(first)-step/2),bandRight=n===1?ml+22:Math.min(W-mr,x(last)+step/2);
+   grid+=`<rect x="${bandX}" y="${mt}" width="${Math.max(0,bandRight-bandX)}" height="${plotH}" rx="14" class="week-focus-band"/><text x="${bandX+10}" y="${mt-11}" class="week-week-label">ÚLTIMOS 7 DIAS</text>`;
+ }
+ const flush=(arr,isWeek)=>{
+   if(arr.length<2)return;
+   const d=arr.map((p,i)=>(i?'L':'M')+x(p.i)+','+y(p.value)).join(' ');
+   if(isWeek)weekSegments+=`<path d="${d}" class="week-line-week"/>`;
+   else historySegments+=`<path d="${d}" class="week-line-history"/>`;
+ };
  let run=[],weekRun=[];
  points.forEach((p,i)=>{
    if(!p.registered){flush(run,false);run=[];flush(weekRun,true);weekRun=[];return;}
    run.push({i,value:p.value});
-   if(i>=weekStart)weekRun.push({i,value:p.value});
+   if(inCurrentWeek(p))weekRun.push({i,value:p.value});
    else if(weekRun.length){flush(weekRun,true);weekRun=[];}
  });
  flush(run,false);flush(weekRun,true);
  points.forEach((p,i)=>{
-   const xx=x(i),active=p.date===today(),d=p.date.split('-').reverse().join('/');
+   const xx=x(i),active=p.date===todayDate,d=p.date.split('-').reverse().join('/');
    if(active)labels+=`<line x1="${xx}" y1="${mt}" x2="${xx}" y2="${mt+plotH}" class="week-today-line"/>`;
-   if(p.registered){const color=statusColor[p.status]||'var(--line2)';pointsSvg+=`<circle cx="${xx}" cy="${y(p.value)}" r="7" fill="var(--panel)" stroke="${color}" stroke-width="3" class="week-point"><title>${d} · ${esc(STATUS[p.status].label)} · ${p.value}/10</title></circle><circle cx="${xx}" cy="${y(p.value)}" r="2.6" fill="${color}" class="week-point-core" aria-hidden="true"/>`}
-   else pointsSvg+=`<circle cx="${xx}" cy="${y(0)}" r="5" fill="var(--panel)" stroke="var(--line2)" stroke-width="2" vector-effect="non-scaling-stroke" class="week-point-unregistered"><title>${d} · Sem registro</title></circle>`;
-   const showDate=n<=28||i===0||i===n-1||i%7===0||active;
-   if(showDate){const dt=new Date(p.date+'T00:00:00'),dow=dt.toLocaleDateString('pt-BR',{weekday:'short'}).replace('.','').slice(0,3);labels+=`<text x="${xx}" y="${H-31}" text-anchor="middle" class="week-x ${active?'active':''}">${dow}</text><text x="${xx}" y="${H-13}" text-anchor="middle" class="week-date ${active?'active':''}">${p.date.slice(8)}</text>`}
+   if(p.registered){
+     const color=statusColor[p.status]||'var(--line2)';
+     pointsSvg+=`<circle cx="${xx}" cy="${y(p.value)}" r="7.2" fill="var(--panel)" stroke="${color}" stroke-width="3" class="week-point"><title>${d} · ${esc(STATUS[p.status].label)} · ${p.value}/10</title></circle><circle cx="${xx}" cy="${y(p.value)}" r="2.6" fill="${color}" class="week-point-core" aria-hidden="true"/>`;
+   }else{
+     pointsSvg+=`<circle cx="${xx}" cy="${y(0)}" r="4.8" class="week-point-unregistered"><title>${d} · Sem registro</title></circle>`;
+   }
+   const dt=new Date(p.date+'T00:00:00'),dow=dt.toLocaleDateString('pt-BR',{weekday:'short'}).replace('.','').slice(0,3);
+   labels+=`<text x="${xx}" y="${H-31}" text-anchor="middle" class="week-x ${active?'active':''}">${dow}</text><text x="${xx}" y="${H-13}" text-anchor="middle" class="week-date ${active?'active':''}">${dt.getDate()}</text>`;
  });
- container.style.overflowX='auto';container.style.overflowY='hidden';container.innerHTML=`<svg class="week-chart-svg week-chart-full" viewBox="0 0 ${W} ${H}" style="width:${W}px;min-width:${W}px;height:auto" role="img" aria-label="Progressão diária desde o início do desafio até hoje. Os últimos sete dias ficam destacados em verde."><defs><filter id="weekPointGlowFull"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>${grid}${historySegments}${weekSegments}${labels}${pointsSvg}</svg>`;
+ container.style.overflowX='auto';container.style.overflowY='hidden';
+ container.innerHTML=`<div class="progress-chart-meta"><span>${points.length} dia${points.length===1?'':'s'} no histórico</span><span>Verde = últimos 7 dias</span></div><svg class="week-chart-svg week-chart-full" viewBox="0 0 ${W} ${H}" style="width:${W}px;min-width:${W}px;height:auto" role="img" aria-label="Histórico diário desde o primeiro registro até o último. Os últimos sete dias aparecem em verde."><defs><filter id="weekPointGlowHistory"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>${grid}${historySegments}${weekSegments}${labels}${pointsSvg}</svg>`;
+}
+function renderProgress(){
+ const me=current(),others=state.users.filter(u=>u.id!==me.id),history=historyPoints(me.id),w=weekStats(me.id),c=memberColor(me,state.users.findIndex(x=>x.id===me.id));
+ if(compareIds.size===0)others.forEach(u=>compareIds.add(u.id));
+ const best=history.reduce((m,p)=>p.registered?Math.max(m,p.value):m,0);
+ const last=history[history.length-1];
+ const start=history[0];
+ const rangeLabel=start&&last?`${start.date.split('-').reverse().join('/')} → ${last.date.split('-').reverse().join('/')}`:'Nenhum registro ainda';
+ $('page-progress').innerHTML=`<div class="head"><div><div class="eyebrow">Progressão</div><h1>Seu progresso, dia após dia.</h1><p>Agora você vê cada registro individual, do primeiro ao último dia marcado. Nenhum dia é transformado em média: 0, 3, 6 e 10 aparecem exatamente como foram registrados.</p></div></div><div class="progress"><section class="card week-progress-card">
+ <div class="week-head"><div><div class="eyebrow">Histórico diário</div><h2>Do primeiro ao último registro.</h2><p>${rangeLabel}. Os últimos 7 dias ficam destacados em verde para você enxergar a semana sem perder o histórico inteiro.</p></div></div>
+ <div class="week-summary"><div class="week-summary-item"><span>Dias registrados</span><b>${history.filter(p=>p.registered).length}</b></div><div class="week-summary-item"><span>Melhor resultado</span><b>${best}<small>/10</small></b></div><div class="week-summary-item"><span>Média da semana</span><b>${w.registered?w.avg.toFixed(1).replace('.',','):'—'}<small>/10</small></b></div></div>
+ <div id="weekChart" class="week-chart"></div>
+ <div class="week-scale"><span><i class="red"></i>0 · Não treinou</span><span><i class="blue"></i>3 · Descanso</span><span><i class="orange"></i>6 · Treino mediano</span><span><i class="green"></i>10 · Treinou bem</span><span class="week-scale-note">Toque e arraste para ver todo o histórico.</span></div>
+ </section>
+ <div class="progress-top"><div class="legend-map"><span class="map-chip" style="border-color:${c};color:${c}"><i style="width:8px;height:8px;border-radius:50%;background:${c}"></i>Você</span>${others.map((u)=>{const cc=memberColor(u,state.users.findIndex(x=>x.id===u.id));return `<label class="map-chip"><input type="checkbox" data-compare="${u.id}" ${compareIds.has(u.id)?'checked':''}><i style="width:8px;height:8px;border-radius:50%;background:${cc}"></i>${esc(u.name)}</label>`}).join('')}</div></div>
+ <section class="card map-box"><div class="map-box-head"><div><div class="eyebrow">Mapa do desafio</div><b>Como os seus registros se distribuíram.</b><small>Este mapa serve para comparar padrões entre participantes. Ele não é uma nota e não substitui o histórico diário.</small></div></div><div id="mapBox"></div></section>
+ </div>`;
+ drawWeekChart($('weekChart'),me.id);drawMap($('mapBox'),me.id,[...compareIds]);document.querySelectorAll('[data-compare]').forEach(x=>x.onchange=()=>{x.checked?compareIds.add(x.dataset.compare):compareIds.delete(x.dataset.compare);drawMap($('mapBox'),me.id,[...compareIds])})
 }
 function drawMap(container,primaryId,otherIds){
  const dates=challengeDates(),n=Math.max(1,dates.length),size=560,c=280,R=214,step=2*Math.PI/n;
@@ -203,7 +238,6 @@ function drawMap(container,primaryId,otherIds){
    const a=-Math.PI/2+i*step,p=hexPoint(R+16,a),d=dates[i].split('-').slice(1).reverse().join('/');
    s+='<text x="'+p.x+'" y="'+p.y+'" text-anchor="'+(Math.cos(a)>.35?'start':Math.cos(a)<-.35?'end':'middle')+'" class="radar-label">'+d+'</text>';
  }
- s+='<polygon class="map-pulse" points="'+hexGrid(22)+'" fill="none" stroke="var(--accent)"/>';
  function draw(u,primary){
    const idx=state.users.findIndex(function(x){return x.id===u.id;}),color=memberColor(u,idx),days=state.days[u.id]||{};
    let segment=[];
@@ -243,7 +277,11 @@ function drawMap(container,primaryId,otherIds){
  state.users.filter(function(u){return u.id!==primaryId&&otherIds.includes(u.id);}).forEach(function(u){draw(u,false);});
  const primary=state.users.find(function(u){return u.id===primaryId;})||current();
  draw(primary,true);
- s+='</svg>';
+ const score=progress(primary.id).score;
+ const dash=Math.max(1,Math.round(score*.62));
+ s+='<polygon points="'+hexGrid(40)+'" fill="var(--panel)" stroke="var(--accent)" stroke-width="1.5" opacity=".97"/>'+
+    '<polygon points="'+hexGrid(33)+'" fill="none" stroke="var(--accent)" stroke-width="4" stroke-dasharray="'+dash+' 200" stroke-linecap="round" transform="rotate(-90 '+c+' '+c+')" opacity=".28"/>'+
+    '<text x="'+c+'" y="'+(c-1)+'" text-anchor="middle" class="map-center-score">'+score+'<tspan class="map-center-sub" x="'+c+'" dy="13">/100</tspan></text></svg>';
  container.innerHTML=s;
 }
 function renderNotes(){const all=Object.entries(state.days).flatMap(([uid,ds])=>Object.entries(ds).filter(([,v])=>v.note).map(([date,v])=>({uid,date,...v}))).sort((a,b)=>b.date.localeCompare(a.date));$('page-notes').innerHTML=`<div class="head"><div><div class="eyebrow">Anotações</div><h1>O que aconteceu.</h1><p>Um histórico simples para lembrar dos dias importantes do grupo.</p></div></div><div class="card"><div class="note-filter"><button class="soft active" data-note-filter="all">Todas</button>${state.users.map(u=>`<button class="soft" data-note-filter="${u.id}">${esc(u.name.split(' ')[0])}</button>`).join('')}</div><div id="notesList" class="notes"></div></div>`;const list=$('notesList');const draw=f=>{const notes=f==='all'?all:all.filter(n=>n.uid===f);list.innerHTML=notes.length?notes.map(n=>{const u=state.users.find(x=>x.id===n.uid);return `<article class="note"><div class="note-head"><div style="display:flex;align-items:center;gap:8px"><span class="group-avatar" style="width:27px;height:27px;background:${memberColor(u,state.users.findIndex(x=>x.id===u.id))}">${getPhoto(u)?`<img src="${esc(getPhoto(u))}" alt="" loading="eager">`:esc(u?.initials||'P')}</span><b>${esc(u?.name||'Pessoa')}</b></div><span>${esc(n.date.split('-').reverse().join('/'))}</span></div><p>${esc(n.note)}</p></article>`}).join(''):'<div style="color:var(--muted);font-size:12px;padding:8px 0">Ainda não há anotações para este filtro.</div>'};draw('all');document.querySelectorAll('[data-note-filter]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-note-filter]').forEach(x=>x.classList.toggle('active',x===b));draw(b.dataset.noteFilter)})}
@@ -262,7 +300,7 @@ function showAuth(){$('bootView').classList.add('hidden');$('authView').classLis
 function enterApp(){if(!currentUser||!state){showBoot('Não foi possível carregar a conta. Tente verificar a sessão novamente.',true);return}$('bootView').classList.add('hidden');$('authView').classList.add('hidden');$('appView').classList.remove('hidden');$('mobileNav').classList.remove('hidden');calendarMemberId=currentUser.id;compareIds.clear();state.users.filter(u=>u.id!==currentUser.id).forEach(u=>compareIds.add(u.id));applyAccent(hex(localStorage.getItem(ACCENT_KEY))||DEFAULT_ACCENTS[theme()],false);renderApp()}
 async function connectSocket(){if(!online||window.__NO_SOCKET__||!window.io)return;try{socket=window.io({withCredentials:true});socket.on('state:update',next=>{state=next;const me=state.users.find(u=>u.id===currentUser?.id);if(!me){logout();return}currentUser=me;renderApp()});socket.on('connect_error',async()=>{try{await api('/api/session')}catch{}})}catch{}}
 async function completeGoogleCallback(){const hash=new URLSearchParams(location.hash.replace(/^#/,'').replace(/^\?/,'').replace(/;/g,'&'));const accessToken=hash.get('access_token'),refreshToken=hash.get('refresh_token');if(!accessToken)return false;if(!refreshToken){toast('A sessão Google veio incompleta. Entre novamente.');history.replaceState({},'',location.pathname);return false}try{const r=await api('/api/auth/google-session',{method:'POST',body:JSON.stringify({access_token:accessToken,refresh_token:refreshToken})});online=true;history.replaceState({},'',location.pathname+(new URLSearchParams(location.search).get('invite')?('?invite='+encodeURIComponent(new URLSearchParams(location.search).get('invite'))):''));currentUser=r.user;const payload=await api('/api/state');state=payload.state;currentUser=payload.me||r.user;enterApp();connectSocket();toast('Login com Google concluído.');return true}catch(e){toast(e.message||'Não foi possível concluir o login com Google.');history.replaceState({},'',location.pathname);return false}}
-async function boot(){showBoot();online=false;googleEnabled=false;const q=new URLSearchParams(location.search);if(q.get('auth_error')){const map={google_not_configured:'Login com Google ainda precisa ser configurado no servidor.',google_failed:'Não foi possível iniciar o login com Google.',google_state:'O convite de login expirou. Tente novamente.',session_not_configured:'A sessão persistente não está configurada no servidor.'};toast(map[q.get('auth_error')]||'Não foi possível entrar.');history.replaceState({},'',location.pathname)}try{if(q.get('auth_callback')&&await completeGoogleCallback())return;const s=await api('/api/session');online=true;try{const p=await api('/api/auth/providers');googleEnabled=Boolean(p.google&&p.persistentDatabase)}catch{googleEnabled=false}$('googleOption').style.display=googleEnabled?'grid':'none';if(s.user){const payload=await api('/api/state');state=payload.state;currentUser=payload.me||s.user;enterApp();connectSocket()}else{currentUser=null;state=null;showAuth()}}catch{online=false;googleEnabled=false;currentUser=null;state=null;$('googleOption').style.display='none';showBoot('Não foi possível confirmar sua sessão agora. Verifique a conexão e tente novamente.',true)}}
+async function boot(){showBoot();online=false;googleEnabled=false;const q=new URLSearchParams(location.search);if(q.get('auth_error')){const map={google_not_configured:'Login com Google ainda precisa ser configurado no servidor.',google_failed:'Não foi possível iniciar o login com Google.',google_state:'O convite de login expirou. Tente novamente.',session_not_configured:'A sessão persistente não está configurada no servidor.'};toast(map[q.get('auth_error')]||'Não foi possível entrar.');history.replaceState({},'',location.pathname)}try{if(q.get('auth_callback')&&await completeGoogleCallback())return;const s=await api('/api/session');online=true;try{const p=await api('/api/auth/providers');googleEnabled=Boolean(p.google&&p.persistentDatabase)}catch{googleEnabled=false}$('googleBtn').style.display=googleEnabled?'flex':'none';if(s.user){const payload=await api('/api/state');state=payload.state;currentUser=payload.me||s.user;enterApp();connectSocket()}else{currentUser=null;state=null;showAuth()}}catch{online=false;googleEnabled=false;currentUser=null;state=null;$('googleBtn').style.display='none';showBoot('Não foi possível confirmar sua sessão agora. Verifique a conexão e tente novamente.',true)}}
 $('googleBtn').onclick=()=>{if(!online)return toast('O login com Google funciona na versão online.');if(!googleEnabled)return toast('O Google ainda não está configurado no servidor.');const invite=new URLSearchParams(location.search).get('invite')||'';location.href='/auth/google'+(invite?'?invite='+encodeURIComponent(invite):'')};
 $('loginForm').onsubmit=async e=>{e.preventDefault();$('loginError').textContent='';const btn=$('loginBtn');btn.disabled=true;btn.textContent='Entrando…';const u=$('loginUser').value.trim().toLowerCase(),p=$('loginPass').value;try{if(!online)throw new Error('Não foi possível validar a conexão com o servidor. Tente novamente.');const r=await api('/api/login',{method:'POST',body:JSON.stringify({username:u,password:p})});currentUser=r.user;const payload=await api('/api/state');state=payload.state;currentUser=payload.me||r.user;enterApp();connectSocket();toast('Bem-vindo.')}catch(err){$('loginError').textContent=err.message}finally{btn.disabled=false;btn.textContent='Entrar'}};
 $('topAccount').onclick=()=>openSettings('home');$('settingsClose').onclick=closeSettings;$('settingsBackBtn').onclick=()=>selectSettings('home');$('settingsBack').onclick=e=>{if(e.target===$('settingsBack'))closeSettings()};document.querySelectorAll('[data-settings]').forEach(b=>b.onclick=()=>selectSettings(b.dataset.settings));$('choosePhoto').onclick=()=>$('profilePhotoInput').click();$('profilePhotoPreview').onclick=()=>{const me=current();openCropper(me?.avatarSource||me?.avatar)};$('editPhoto').onclick=()=>{const me=current();openCropper(me?.avatarSource||me?.avatar)};$('removePhoto').onclick=()=>{const me=current();me.avatar=null;me.avatarSource=null;me.avatarCrop=null;if(state?.users){const u=state.users.find(x=>x.id===me.id);if(u){u.avatar=null;u.avatarSource=null;u.avatarCrop=null}}$('profilePhotoInput').value='';writeLocal();if(online)api('/api/settings',{method:'POST',body:JSON.stringify({avatar:null})}).catch(()=>{});renderApp();openSettings('profile');toast('Foto removida.')};$('profilePhotoInput').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;if(!file.type.startsWith('image/'))return toast('Escolha uma imagem válida.');try{const source=await compressImage(file,1400);const me=current();me.avatarSource=source;me.avatarCrop=null;openCropper(source);$('profilePhotoInput').value=''}catch(err){toast(err.message)}};$('cropClose').onclick=closeCropper;$('cropCancel').onclick=closeCropper;$('cropBack').onclick=e=>{if(e.target===$('cropBack'))closeCropper()};$('cropReset').onclick=cropReset;$('cropZoom').oninput=e=>{cropZoom=Number(e.target.value)||1;renderCrop()};$('cropZoomOut').onclick=()=>{cropZoom=clamp(Number((cropZoom-.15).toFixed(2)),1,cropMax);renderCrop()};$('cropZoomIn').onclick=()=>{cropZoom=clamp(Number((cropZoom+.15).toFixed(2)),1,cropMax);renderCrop()};$('cropSave').onclick=applyCrop;$('cropStage').addEventListener('pointerdown',e=>{if(!cropImage)return;cropPointerId=e.pointerId;cropStartX=e.clientX;cropStartY=e.clientY;cropStartPanX=cropPanX;cropStartPanY=cropPanY;$('cropStage').classList.add('dragging');$('cropStage').setPointerCapture?.(e.pointerId)});$('cropStage').addEventListener('pointermove',e=>{if(e.pointerId!==cropPointerId)return;cropPanX=cropStartPanX+(e.clientX-cropStartX);cropPanY=cropStartPanY+(e.clientY-cropStartY);renderCrop()});['pointerup','pointercancel','pointerleave'].forEach(t=>$('cropStage').addEventListener(t,e=>{if(e.pointerId===cropPointerId){cropPointerId=null;$('cropStage').classList.remove('dragging')}}));window.addEventListener('resize',()=>{if($('cropBack').classList.contains('show'))renderCrop()});$('settingsBack').addEventListener('pointerdown',e=>{if(e.target!==$('settingsBack'))return});const settingsGrabber=$('settingsBack').querySelector('.settings-grabber');settingsGrabber.addEventListener('pointerdown',e=>{settingsDragStartY=e.clientY;settingsDragStartX=e.clientX;settingsDragging=true;$('settingsPanel')?.setPointerCapture?.(e.pointerId);settingsGrabber.setPointerCapture?.(e.pointerId)});settingsGrabber.addEventListener('pointermove',e=>{if(!settingsDragging)return;const dy=Math.max(0,e.clientY-settingsDragStartY);if(dy>0)$('settingsBack').querySelector('.settings-panel').style.transform=`translateY(${dy}px)`});['pointerup','pointercancel'].forEach(t=>settingsGrabber.addEventListener(t,e=>{if(!settingsDragging)return;const dy=Math.max(0,e.clientY-settingsDragStartY);settingsDragging=false;const panel=$('settingsBack').querySelector('.settings-panel');panel.style.transform='';if(dy>90)closeSettings()}));
