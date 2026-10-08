@@ -21,15 +21,12 @@
   </div>
 </section>
 <section id="authView" class="auth hidden">
-  <div class="auth-card login-card">
+  <div class="auth-card">
     <div class="auth-head"><div class="brand"><div class="brand-mark">ST</div><div class="brand-name">SHAPE<span>TOGETHER</span></div></div><button id="authTheme" class="theme-trigger" type="button" aria-label="Abrir aparência"></button></div>
-    <div class="auth-status"><span class="auth-status-dot"></span><span>Desafio em andamento</span><b>29/09 → 31/12</b></div>
-    <div class="auth-copy"><div class="eyebrow">Seu treino, sem complicação.</div><h1>Volte mais forte<br>a cada dia.</h1><p>Registre seu treino, acompanhe a qualidade da semana e veja seu grupo evoluir.</p></div>
-    <div class="auth-highlights" aria-label="Recursos do aplicativo"><span><b>01</b><small>Registre o dia</small></span><span><b>02</b><small>Veja a progressão</small></span><span><b>03</b><small>Avance em grupo</small></span></div>
-    <button id="googleBtn" class="google-btn" type="button"><span class="google-icon">G</span>Continuar com Google</button>
-    <div class="auth-sep" style="margin:14px 0">ou entrar com usuário</div>
-    <form id="loginForm" class="auth-form" autocomplete="on"><div class="field"><label for="loginUser">Usuário</label><input id="loginUser" name="username" autocomplete="username" placeholder="Digite seu usuário" required></div><div class="field"><label for="loginPass">Senha</label><div class="password-wrap"><input id="loginPass" name="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required><button id="toggleLoginPass" class="password-toggle" type="button" aria-label="Mostrar senha" aria-pressed="false">Mostrar</button></div></div><div id="loginError" class="auth-error" aria-live="polite"></div><button id="loginBtn" class="primary login-submit" type="submit"><span>Entrar</span><span aria-hidden="true">→</span></button></form>
-    <div class="auth-foot"><span>Seu acesso é protegido por sessão segura.</span><span id="localTestHint" hidden>Teste local: <b>voce</b>, <b>amigo1</b> ou <b>amigo2</b> · senha <b>123456</b>.</span></div>
+    <div class="auth-copy"><div class="eyebrow">Desafio · 29/09 → 31/12</div><h1>Meter o shape,<br>juntos.</h1><p>Registre o dia, acompanhe sua progressão e veja o grupo evoluir.</p></div>
+    <form id="loginForm" class="auth-form" autocomplete="on"><div class="field"><label for="loginUser">Usuário</label><input id="loginUser" name="username" autocomplete="username" placeholder="Seu usuário" required></div><div class="field"><label for="loginPass">Senha</label><input id="loginPass" name="password" type="password" autocomplete="current-password" placeholder="Sua senha" required></div><div id="loginError" class="auth-error" aria-live="polite"></div><button id="loginBtn" class="primary" type="submit">Entrar</button></form>
+    <div id="googleOption" class="google-option"><div class="auth-sep">ou entrar com Google</div><button id="googleBtn" class="google-btn" type="button"><span class="google-icon">G</span>Continuar com Google</button></div>
+    <div class="auth-foot">Teste local: <b>voce</b>, <b>amigo1</b> ou <b>amigo2</b> · senha <b>123456</b>.</div>
   </div>
 </section>
 <section id="appView" class="app hidden">
