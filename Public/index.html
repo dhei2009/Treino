@@ -23,11 +23,9 @@
 <section id="authView" class="auth hidden">
   <div class="auth-card">
     <div class="auth-head"><div class="brand"><div class="brand-mark">ST</div><div class="brand-name">SHAPE<span>TOGETHER</span></div></div><button id="authTheme" class="theme-trigger" type="button" aria-label="Abrir aparência"></button></div>
-    <div class="auth-copy"><div class="eyebrow">Desafio · 29/09 → 31/12</div><h1>Meter o shape,<br>juntos.</h1><p>Registre o dia, acompanhe sua progressão e veja o grupo evoluir.</p></div>
-    <form id="loginForm" class="auth-form" autocomplete="on"><div class="field"><label for="loginUser">Usuário</label><input id="loginUser" name="username" autocomplete="username" placeholder="Seu usuário" required></div><div class="field"><label for="loginPass">Senha</label><input id="loginPass" name="password" type="password" autocomplete="current-password" placeholder="Sua senha" required></div><div id="loginError" class="auth-error" aria-live="polite"></div><button id="loginBtn" class="primary" type="submit">Entrar</button></form>
-    <div id="googleOption" class="google-option"><div class="auth-sep">ou entrar com Google</div><button id="googleBtn" class="google-btn" type="button"><span class="google-icon">G</span>Continuar com Google</button></div>
-    <div class="auth-foot">Teste local: <b>voce</b>, <b>amigo1</b> ou <b>amigo2</b> · senha <b>123456</b>.</div>
-  </div>
+    <div class="auth-copy"><h1 style="text-align:center;white-space:nowrap;font-size:clamp(27px,8.2vw,50px);">Meter o shape juntos.</h1></div>
+    <div id="googleOption" class="google-option"><button id="googleBtn" class="google-btn" type="button"><span class="google-icon">G</span>Entrar com Google</button></div>
+      </div>
 </section>
 <section id="appView" class="app hidden">
   <aside class="side"><div class="side-brand"><div class="brand-mark">ST</div><div class="brand-name">SHAPE<span>TOGETHER</span></div></div><div id="sideUser" class="user-chip"></div><nav id="sideNav" class="nav"></nav><div class="side-bottom"><button id="sideTheme" class="utility" type="button"></button><button id="sideLogout" class="utility" type="button"></button></div></aside>
@@ -45,7 +43,6 @@
 </div>
 <div id="dayBack" class="sheet-back" aria-hidden="true"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-title"><div id="sheetAvatar" class="avatar"></div><div><h3 id="sheetTitle">Registrar dia</h3><small id="sheetSub"></small></div></div><div id="statusOptions" class="sheet-status"></div><textarea id="dayNote" placeholder="Anotação do dia (opcional)"></textarea><div class="sheet-actions"><button id="deleteDay" class="danger" type="button">Apagar</button><button id="cancelDay" class="soft" type="button">Cancelar</button><button id="saveDay" class="primary" type="button" style="height:40px;padding:0 14px">Salvar</button></div></div></div>
 
-<script src="/socket.io/socket.io.js" onerror="window.__NO_SOCKET__=true"></script>
 <script src="/js/app.js"></script>
 </body>
 </html>
