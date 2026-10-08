@@ -177,6 +177,14 @@ function authCredentialError(error) {
   );
 }
 
+function withTimeout(promise, ms, message) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 function initials(name) {
   return (
     String(name || 'EU')
@@ -562,15 +570,37 @@ async function sessionUser(req, res) {
     return null;
   }
 
-  const authClient = requireAuthClient();
-  let authUser = null;
+  // A sessão já foi assinada pelo Worker no login. Não precisamos chamar
+  // Supabase Auth novamente a cada abertura do site: isso deixava a tela de
+  // preparação dependente de uma chamada externa antes mesmo de carregar o app.
+  // Validamos o vínculo local e só fazemos refresh quando o token está perto de expirar.
   let shouldRefreshCookie = false;
   const expiry = Number(session.expiresAt) || jwtExpiry(session.accessToken);
+  let appUser = await getUserById(session.appUserId);
 
-  if (expiry <= Math.floor(Date.now() / 1000) + 60) {
-    const { data, error } = await authClient.auth.refreshSession({
-      refresh_token: session.refreshToken
-    });
+  if (!appUser || appUser.auth_user_id !== session.authUserId) {
+    clearSessionCookie(req, res);
+    return null;
+  }
+
+  if (expiry <= Math.floor(Date.now() / 1000) + 90) {
+    const authClient = requireAuthClient();
+    let refreshResult;
+    try {
+      refreshResult = await withTimeout(
+        authClient.auth.refreshSession({ refresh_token: session.refreshToken }),
+        10000,
+        'O servidor demorou para atualizar a sessão.'
+      );
+    } catch (error) {
+      if (authCredentialError(error) || /demorou para atualizar/i.test(String(error?.message || ''))) {
+        clearSessionCookie(req, res);
+        return null;
+      }
+      throw error;
+    }
+
+    const { data, error } = refreshResult;
     if (error) {
       if (authCredentialError(error)) {
         clearSessionCookie(req, res);
@@ -581,7 +611,8 @@ async function sessionUser(req, res) {
     if (
       !data?.session?.access_token ||
       !data?.session?.refresh_token ||
-      !data?.user
+      !data?.user ||
+      data.user.id !== session.authUserId
     ) {
       clearSessionCookie(req, res);
       return null;
@@ -594,39 +625,14 @@ async function sessionUser(req, res) {
       expiresAt:
         Number(data.session.expires_at) || jwtExpiry(data.session.access_token)
     };
-    authUser = data.user;
     shouldRefreshCookie = true;
-  } else {
-    const { data, error } = await authClient.auth.getUser(session.accessToken);
-    if (error) {
-      if (authCredentialError(error)) {
-        clearSessionCookie(req, res);
-        return null;
-      }
-      throw error;
-    }
-    authUser = data?.user || null;
-  }
-
-  if (!authUser?.id || authUser.id !== session.authUserId) {
-    clearSessionCookie(req, res);
-    return null;
-  }
-
-  let appUser = await getUserById(session.appUserId);
-  if (!appUser || appUser.auth_user_id !== authUser.id) {
-    appUser = await createOrLinkAppUser(authUser);
-    if (session.appUserId !== appUser.id) {
-      session = { ...session, appUserId: appUser.id };
-      shouldRefreshCookie = true;
-    }
   }
 
   if (shouldRefreshCookie) setSessionCookie(req, res, session);
   return {
     id: appUser.id,
     kind: 'google',
-    authUserId: authUser.id
+    authUserId: session.authUserId
   };
 }
 
