@@ -227,7 +227,8 @@ function publicUser(row, pref = null) {
       pref?.accent,
       pref?.theme === 'dark' ? DEFAULTS.dark.accent : DEFAULTS.light.accent
     ),
-    activeGroupId: row.active_group_id || null
+    activeGroupId: row.active_group_id || null,
+    defaultWorkspace: pref?.default_workspace_mode === 'group' ? 'group' : 'personal'
   };
 }
 
@@ -323,28 +324,110 @@ async function ensurePrefs(userId) {
 async function activeGroupForUser(userId) {
   const supabase = requireSupabase();
   const user = await getUserById(userId);
-  if (!user?.active_group_id) return null;
+  const groupId = user?.active_group_id || null;
+  if (!groupId) return null;
+
+  const { data: membership, error: membershipError } = await supabase
+    .from('group_members')
+    .select('group_id')
+    .eq('group_id', groupId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (membershipError) throw membershipError;
+  if (!membership) return null;
+
   const { data, error } = await supabase
     .from('groups')
     .select('*')
-    .eq('id', user.active_group_id)
+    .eq('id', groupId)
     .maybeSingle();
   if (error) throw error;
   return data;
 }
 
-async function loadStateForUser(userId) {
+async function groupsForUser(userId) {
+  const supabase = requireSupabase();
+  const { data: members, error: memberError } = await supabase
+    .from('group_members')
+    .select('group_id, role, joined_at')
+    .eq('user_id', userId)
+    .order('joined_at', { ascending: true });
+  if (memberError) throw memberError;
+
+  const ids = [...new Set((members || []).map((m) => m.group_id))];
+  if (!ids.length) return [];
+
+  const { data: groupRows, error: groupError } = await supabase
+    .from('groups')
+    .select('*')
+    .in('id', ids);
+  if (groupError) throw groupError;
+
+  const byId = new Map((groupRows || []).map((g) => [g.id, g]));
+  return (members || [])
+    .map((m) => {
+      const g = byId.get(m.group_id);
+      if (!g) return null;
+      return {
+        id: g.id,
+        name: g.name,
+        inviteCode: g.invite_code,
+        visibility: g.visibility === 'public' ? 'public' : 'private',
+        role: m.role,
+        challengeStart: g.challenge_start,
+        challengeEnd: g.challenge_end
+      };
+    })
+    .filter(Boolean);
+}
+
+async function groupForUser(userId, groupId) {
+  const id = String(groupId || '').trim();
+  if (!id) return null;
+  const supabase = requireSupabase();
+  const { data: membership, error: membershipError } = await supabase
+    .from('group_members')
+    .select('group_id, role')
+    .eq('group_id', id)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (membershipError) throw membershipError;
+  if (!membership) return null;
+  const { data: group, error: groupError } = await supabase
+    .from('groups')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (groupError) throw groupError;
+  return group;
+}
+
+async function loadStateForUser(userId, workspaceMode = 'auto', requestedGroupId = null) {
   const supabase = requireSupabase();
   const user = await getUserById(userId);
   if (!user) throw new Error('Usuário não encontrado.');
 
-  const prefs = await getPrefs(userId);
-  const group = user.active_group_id
-    ? await activeGroupForUser(userId)
-    : null;
+  const prefs = await ensurePrefs(userId);
+  let mode = workspaceMode === 'group' || workspaceMode === 'personal'
+    ? workspaceMode
+    : (prefs.default_workspace_mode === 'group' ? 'group' : 'personal');
+  const groups = await groupsForUser(userId);
+  let group = null;
+
+  if (mode === 'group') {
+    group = requestedGroupId
+      ? await groupForUser(userId, requestedGroupId)
+      : await activeGroupForUser(userId);
+    if (!group) {
+      if (workspaceMode === 'auto') {
+        mode = 'personal';
+      } else {
+        throw Object.assign(new Error('Você ainda não participa de nenhuma sala.'), { code: 'NO_GROUP' });
+      }
+    }
+  }
 
   let ids = [userId];
-
   if (group) {
     const { data: members, error: memberErr } = await supabase
       .from('group_members')
@@ -398,13 +481,16 @@ async function loadStateForUser(userId) {
   }
 
   return {
+    workspaceMode: group ? 'group' : 'personal',
     users: ordered,
     days: dayMap,
+    groups,
     group: group
       ? {
           id: group.id,
           name: group.name,
           inviteCode: group.invite_code,
+          visibility: group.visibility === 'public' ? 'public' : 'private',
           challengeStart: group.challenge_start,
           challengeEnd: group.challenge_end
         }
@@ -413,8 +499,8 @@ async function loadStateForUser(userId) {
 }
 
 async function groupIdForUser(userId) {
-  const u = await getUserById(userId);
-  return u?.active_group_id || null;
+  const group = await activeGroupForUser(userId);
+  return group?.id || null;
 }
 
 // Intencionalmente sem Socket.IO no Worker.
@@ -567,7 +653,7 @@ function appOrigin(req) {
 }
 
 const databaseRoutes =
-  /^\/api\/(?:health|session|auth\/google-session|login|logout|state|day(?:\/[^/]+)?|settings|invite|group(?:\/join)?|levels)$/;
+  /^\/api\/(?:health|session|auth\/google-session|login|logout|state|day(?:\/[^/]+)?|settings(?:\/workspace-default)?|workspace|groups|invite|group(?:\/join)?|levels)$/;
 
 const app = express();
 app.set('trust proxy', 1);
@@ -1017,35 +1103,26 @@ app.post('/api/settings', requireAuth, async (req, res) => {
   try {
     const supabase = requireSupabase();
     const user = await getUserById(req.userId);
-    if (!user) {
-      return res.status(404).json({ error: 'Usuário não encontrado.' });
-    }
+    if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
 
     const prefs = await ensurePrefs(req.userId);
     const updates = {};
 
     if (req.body.name !== undefined) {
       const name = String(req.body.name).trim().slice(0, 60);
-      if (name.length < 2) {
-        return res.status(400).json({ error: 'Nome inválido.' });
-      }
+      if (name.length < 2) return res.status(400).json({ error: 'Nome inválido.' });
       updates.name = name;
       updates.initials = initials(name);
     }
-
     if (req.body.initials !== undefined) {
-      updates.initials =
-        String(req.body.initials).trim().slice(0, 3) ||
-        initials(updates.name || user.name);
+      updates.initials = String(req.body.initials).trim().slice(0, 3) || initials(updates.name || user.name);
     }
-
     if (req.body.color !== undefined) {
       updates.color = cleanHex(req.body.color, user.color || '#4C7DFF');
     }
 
     let avatarPath = user.avatar_path;
     let avatarSourcePath = user.avatar_source_path;
-
     if (req.body.avatar === null) {
       await deleteAvatarFiles(req.userId);
       avatarPath = null;
@@ -1053,64 +1130,33 @@ app.post('/api/settings', requireAuth, async (req, res) => {
       updates.avatar_crop = null;
     } else if (req.body.avatar) {
       avatarPath = await uploadAvatar(req.userId, 'profile', req.body.avatar);
-      if (req.body.avatarSource) {
-        avatarSourcePath = await uploadAvatar(
-          req.userId,
-          'original',
-          req.body.avatarSource
-        );
-      }
-      updates.avatar_crop =
-        req.body.avatarCrop && typeof req.body.avatarCrop === 'object'
-          ? req.body.avatarCrop
-          : null;
+      if (req.body.avatarSource) avatarSourcePath = await uploadAvatar(req.userId, 'original', req.body.avatarSource);
+      updates.avatar_crop = req.body.avatarCrop && typeof req.body.avatarCrop === 'object' ? req.body.avatarCrop : null;
     }
-
     if (req.body.avatarSource === null) avatarSourcePath = null;
     updates.avatar_path = avatarPath;
     updates.avatar_source_path = avatarSourcePath;
 
     const { data: nextUser, error: userErr } = await supabase
-      .from('app_users')
-      .update(updates)
-      .eq('id', req.userId)
-      .select('*')
-      .single();
+      .from('app_users').update(updates).eq('id', req.userId).select('*').single();
     if (userErr) throw userErr;
 
     const prefUpdates = {};
-    if (req.body.theme === 'dark' || req.body.theme === 'light') {
-      prefUpdates.theme = req.body.theme;
-    }
+    if (req.body.theme === 'dark' || req.body.theme === 'light') prefUpdates.theme = req.body.theme;
     if (req.body.accent !== undefined) {
-      prefUpdates.accent = cleanHex(
-        req.body.accent,
-        prefs.accent ||
-          (prefs.theme === 'dark'
-            ? DEFAULTS.dark.accent
-            : DEFAULTS.light.accent)
-      );
+      prefUpdates.accent = cleanHex(req.body.accent, prefs.accent || (prefs.theme === 'dark' ? DEFAULTS.dark.accent : DEFAULTS.light.accent));
     }
 
     let nextPrefs = prefs;
     if (Object.keys(prefUpdates).length) {
-      const { data, error } = await supabase
-        .from('user_preferences')
-        .upsert(
-          {
-            user_id: req.userId,
-            ...prefUpdates,
-            updated_at: new Date().toISOString()
-          },
-          { onConflict: 'user_id' }
-        )
-        .select('*')
-        .single();
+      const { data, error } = await supabase.from('user_preferences').upsert({
+        user_id: req.userId, ...prefUpdates, updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' }).select('*').single();
       if (error) throw error;
       nextPrefs = data;
     }
 
-    const state = await loadStateForUser(req.userId);
+    const state = await loadStateForUser(req.userId, 'auto');
     const me = publicUser(nextUser, nextPrefs);
     const gid = await groupIdForUser(req.userId);
     await broadcastGroup(gid);
@@ -1121,50 +1167,81 @@ app.post('/api/settings', requireAuth, async (req, res) => {
   }
 });
 
-app.post('/api/invite', requireAuth, async (req, res) => {
+app.post('/api/settings/workspace-default', requireAuth, async (req, res) => {
   try {
+    const mode = String(req.body?.defaultWorkspace || '').trim().toLowerCase();
+    if (!['personal', 'group'].includes(mode)) {
+      return res.status(400).json({ error: 'Espaço inicial inválido.' });
+    }
+    const prefs = await ensurePrefs(req.userId);
     const supabase = requireSupabase();
-    let group = await activeGroupForUser(req.userId);
+    let defaultGroup = null;
+    if (mode === 'group') {
+      defaultGroup = req.body?.groupId ? await groupForUser(req.userId, req.body.groupId) : await activeGroupForUser(req.userId);
+      if (!defaultGroup) {
+        const available = await groupsForUser(req.userId);
+        if (available.length) defaultGroup = await groupForUser(req.userId, available[0].id);
+      }
+      if (!defaultGroup) return res.status(400).json({ error: 'Entre ou crie uma sala antes de escolhê-la como espaço inicial.' });
+      const { error: activeGroupError } = await supabase.from('app_users').update({ active_group_id: defaultGroup.id }).eq('id', req.userId);
+      if (activeGroupError) throw activeGroupError;
+    }
+    const { data: nextPrefs, error } = await supabase
+      .from('user_preferences')
+      .upsert({ user_id: req.userId, theme: prefs.theme, accent: prefs.accent, default_workspace_mode: mode, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+      .select('*').single();
+    if (error) throw error;
+    res.json({ ok: true, user: publicUser(await getUserById(req.userId), nextPrefs) });
+  } catch (e) {
+    console.error('Default workspace save failed:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
 
-    if (!group) {
-      const code = crypto.randomBytes(5).toString('hex').toUpperCase();
-      const { data: g, error: ge } = await supabase
-        .from('groups')
-        .insert({
-          name: 'Shape Together',
-          created_by: req.userId,
-          invite_code: code,
-          challenge_start: challengeStart,
-          challenge_end: challengeEnd
-        })
-        .select('*')
-        .single();
-      if (ge) throw ge;
+app.post('/api/workspace', requireAuth, async (req, res) => {
+  try {
+    const mode = String(req.body?.mode || '').trim().toLowerCase();
+    if (!['personal', 'group'].includes(mode)) return res.status(400).json({ error: 'Modo de espaço inválido.' });
 
-      group = g;
-      const { error: meErr } = await supabase
-        .from('group_members')
-        .insert({
-          group_id: group.id,
-          user_id: req.userId,
-          role: 'owner'
-        });
-      if (meErr) throw meErr;
-
-      const { error: userErr } = await supabase
-        .from('app_users')
-        .update({ active_group_id: group.id })
-        .eq('id', req.userId);
-      if (userErr) throw userErr;
+    let group = null;
+    if (mode === 'group') {
+      group = req.body?.groupId ? await groupForUser(req.userId, req.body.groupId) : await activeGroupForUser(req.userId);
+      if (!group) return res.status(403).json({ error: 'Você não participa dessa sala.' });
+      const supabase = requireSupabase();
+      const { error } = await supabase.from('app_users').update({ active_group_id: group.id }).eq('id', req.userId);
+      if (error) throw error;
     }
 
+    const state = await loadStateForUser(req.userId, mode, group?.id || null);
+    res.json({ ok: true, state, me: publicUser(await getUserById(req.userId), await getPrefs(req.userId)) });
+  } catch (e) {
+    console.error('Workspace switch failed:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/groups', requireAuth, async (req, res) => {
+  try {
+    res.json({ groups: await groupsForUser(req.userId) });
+  } catch (e) {
+    console.error('Groups load failed:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/invite', requireAuth, async (req, res) => {
+  try {
+    const group = await activeGroupForUser(req.userId);
+    if (!group) return res.status(400).json({ error: 'Escolha uma sala antes de gerar o convite.' });
     const origin = appOrigin(req);
     const url = `${origin}/?invite=${encodeURIComponent(group.invite_code)}`;
     res.json({
       ok: true,
       code: group.invite_code,
       url,
-      groupId: group.id
+      groupId: group.id,
+      name: group.name,
+      visibility: group.visibility === 'public' ? 'public' : 'private'
     });
   } catch (e) {
     console.error('Invite creation failed:', e);
@@ -1175,44 +1252,27 @@ app.post('/api/invite', requireAuth, async (req, res) => {
 app.post('/api/group', requireAuth, async (req, res) => {
   try {
     const supabase = requireSupabase();
-    const name =
-      String(req.body.name || 'Shape Together').trim().slice(0, 60) ||
-      'Shape Together';
+    const name = String(req.body.name || 'Shape Together').trim().slice(0, 60) || 'Shape Together';
+    const visibility = String(req.body.visibility || 'private').trim().toLowerCase() === 'public' ? 'public' : 'private';
     const code = crypto.randomBytes(5).toString('hex').toUpperCase();
 
-    const { data: group, error } = await supabase
-      .from('groups')
-      .insert({
-        name,
-        created_by: req.userId,
-        invite_code: code,
-        challenge_start: challengeStart,
-        challenge_end: challengeEnd
-      })
-      .select('*')
-      .single();
+    const { data: group, error } = await supabase.from('groups').insert({
+      name,
+      created_by: req.userId,
+      invite_code: code,
+      visibility,
+      challenge_start: challengeStart,
+      challenge_end: challengeEnd
+    }).select('*').single();
     if (error) throw error;
 
-    const { error: memberErr } = await supabase
-      .from('group_members')
-      .insert({
-        group_id: group.id,
-        user_id: req.userId,
-        role: 'owner'
-      });
+    const { error: memberErr } = await supabase.from('group_members').insert({ group_id: group.id, user_id: req.userId, role: 'owner' });
     if (memberErr) throw memberErr;
 
-    const { error: userErr } = await supabase
-      .from('app_users')
-      .update({ active_group_id: group.id })
-      .eq('id', req.userId);
+    const { error: userErr } = await supabase.from('app_users').update({ active_group_id: group.id }).eq('id', req.userId);
     if (userErr) throw userErr;
 
-    res.json({
-      ok: true,
-      group,
-      state: await loadStateForUser(req.userId)
-    });
+    res.json({ ok: true, group, state: await loadStateForUser(req.userId, 'group', group.id), me: publicUser(await getUserById(req.userId), await getPrefs(req.userId)) });
   } catch (e) {
     console.error('Group creation failed:', e);
     res.status(500).json({ error: e.message });
@@ -1223,41 +1283,21 @@ app.post('/api/group/join', requireAuth, async (req, res) => {
   try {
     const supabase = requireSupabase();
     const code = String(req.body.code || '').trim().toUpperCase();
-    if (!code) {
-      return res.status(400).json({ error: 'Código do convite ausente.' });
-    }
+    if (!code) return res.status(400).json({ error: 'Código do convite ausente.' });
 
-    const { data: group, error } = await supabase
-      .from('groups')
-      .select('*')
-      .eq('invite_code', code)
-      .maybeSingle();
+    const { data: group, error } = await supabase.from('groups').select('*').eq('invite_code', code).maybeSingle();
     if (error) throw error;
-    if (!group) {
-      return res.status(404).json({ error: 'Convite não encontrado.' });
-    }
+    if (!group) return res.status(404).json({ error: 'Convite não encontrado.' });
 
-    const { error: mErr } = await supabase
-      .from('group_members')
-      .upsert(
-        {
-          group_id: group.id,
-          user_id: req.userId,
-          role: 'member'
-        },
-        { onConflict: 'group_id,user_id' }
-      );
+    const { error: mErr } = await supabase.from('group_members').upsert({ group_id: group.id, user_id: req.userId, role: 'member' }, { onConflict: 'group_id,user_id' });
     if (mErr) throw mErr;
 
-    const { error: uErr } = await supabase
-      .from('app_users')
-      .update({ active_group_id: group.id })
-      .eq('id', req.userId);
+    const { error: uErr } = await supabase.from('app_users').update({ active_group_id: group.id }).eq('id', req.userId);
     if (uErr) throw uErr;
 
-    const state = await loadStateForUser(req.userId);
+    const state = await loadStateForUser(req.userId, 'group', group.id);
     await broadcastGroup(group.id);
-    res.json({ ok: true, group, state });
+    res.json({ ok: true, group, state, me: publicUser(await getUserById(req.userId), await getPrefs(req.userId)) });
   } catch (e) {
     console.error('Group join failed:', e);
     res.status(500).json({ error: e.message });

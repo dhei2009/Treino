@@ -16,3 +16,7 @@ O banco Supabase **não deve ser apagado nem recriado**. Este pacote não conté
 O `server.js` também não é substituído neste pacote: as rotas legadas permanecem no backend por segurança de compatibilidade, mas não são mais apresentadas no frontend.
 
 Depois da substituição, apague manualmente o arquivo `render.yaml` do repositório, pois o projeto atual usa Cloudflare Worker e não Render.
+
+
+## Espaço Pessoal e Salas
+A atualização adiciona `Pessoal` e `Sala/Grupo` como espaços separados. Execute `supabase/workspace-mode.sql` uma única vez no Supabase antes do deploy. A migração só adiciona colunas, restrições e índices; não remove registros.
