@@ -236,7 +236,9 @@ function publicUser(row, pref = null) {
       pref?.theme === 'dark' ? DEFAULTS.dark.accent : DEFAULTS.light.accent
     ),
     activeGroupId: row.active_group_id || null,
-    defaultWorkspace: pref?.default_workspace_mode === 'group' ? 'group' : 'personal'
+    defaultWorkspace: pref?.default_workspace_mode === 'group' ? 'group' : 'personal',
+    personalGoalStart: pref?.personal_goal_start || '2026-09-29',
+    personalGoalEnd: pref?.personal_goal_end || '2026-12-31'
   };
 }
 
@@ -436,6 +438,7 @@ async function loadStateForUser(userId, workspaceMode = 'auto', requestedGroupId
   }
 
   let ids = [userId];
+  let membershipRows = [];
   if (group) {
     const { data: members, error: memberErr } = await supabase
       .from('group_members')
@@ -443,7 +446,8 @@ async function loadStateForUser(userId, workspaceMode = 'auto', requestedGroupId
       .eq('group_id', group.id)
       .order('joined_at', { ascending: true });
     if (memberErr) throw memberErr;
-    ids = [...new Set([userId, ...(members || []).map((m) => m.user_id)])];
+    membershipRows = members || [];
+    ids = [...new Set([userId, ...membershipRows.map((m) => m.user_id)])];
   }
 
   const { data: users, error: usersErr } = await supabase
@@ -479,10 +483,11 @@ async function loadStateForUser(userId, workspaceMode = 'auto', requestedGroupId
   }
 
   const byId = new Map((users || []).map((u) => [u.id, u]));
+  const roleByUser = new Map(membershipRows.map((m) => [m.user_id, m.role]));
   const ordered = ids
     .map((id) => byId.get(id))
     .filter(Boolean)
-    .map((u) => publicUser(u, prefMap.get(u.id)));
+    .map((u) => ({ ...publicUser(u, prefMap.get(u.id)), groupRole: group ? (roleByUser.get(u.id) || (group.created_by === u.id ? 'owner' : 'member')) : null }));
 
   if (!byId.has(userId)) {
     throw new Error('Usuário autenticado não foi encontrado em app_users.');
@@ -500,7 +505,9 @@ async function loadStateForUser(userId, workspaceMode = 'auto', requestedGroupId
           inviteCode: group.invite_code,
           visibility: group.visibility === 'public' ? 'public' : 'private',
           challengeStart: group.challenge_start,
-          challengeEnd: group.challenge_end
+          challengeEnd: group.challenge_end,
+          role: roleByUser.get(userId) || (group.created_by === userId ? 'owner' : 'member'),
+          createdBy: group.created_by || null
         }
       : null
   };
@@ -659,7 +666,7 @@ function appOrigin(req) {
 }
 
 const databaseRoutes =
-  /^\/api\/(?:health|session|auth\/google-session|login|logout|state|day(?:\/[^/]+)?|settings(?:\/workspace-default)?|workspace|groups|invite|group(?:\/join)?|levels)$/;
+  /^\/api\/(?:health|session|auth\/google-session|login|logout|state|day(?:\/[^/]+)?|settings(?:\/(?:workspace-default|goal))?|workspace|groups|invite|group(?:\/(?:join|manage))?|levels)$/;
 
 const app = express();
 app.set('trust proxy', 1);
@@ -1173,6 +1180,52 @@ app.post('/api/settings', requireAuth, async (req, res) => {
   }
 });
 
+app.post('/api/settings/goal', requireAuth, async (req, res) => {
+  try {
+    const mode = String(req.body?.mode || 'personal').trim().toLowerCase();
+    const start = String(req.body?.start || '').trim();
+    const end = String(req.body?.end || '').trim();
+    const validDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
+    if (!['personal', 'group'].includes(mode)) return res.status(400).json({ error: 'Tipo de meta inválido.' });
+    if (!validDate(start) || !validDate(end) || start > end) return res.status(400).json({ error: 'Informe datas válidas e um término igual ou posterior ao início.' });
+    if ((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000 > 1096) return res.status(400).json({ error: 'A meta pode durar no máximo 3 anos.' });
+    const supabase = requireSupabase();
+    if (mode === 'personal') {
+      const { error } = await supabase.from('user_preferences').upsert({
+        user_id: req.userId,
+        personal_goal_start: start,
+        personal_goal_end: end,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+      if (error) {
+        if (/personal_goal_(start|end)|column .* does not exist/i.test(error.message || '')) {
+          return res.status(409).json({ error: 'Falta aplicar a migração supabase/personal-goals.sql no Supabase. Ela só adiciona as datas da meta e preserva os dados.' });
+        }
+        throw error;
+      }
+      const state = await loadStateForUser(req.userId, 'personal');
+      res.json({ ok: true, state, me: publicUser(await getUserById(req.userId), await getPrefs(req.userId)) });
+      return;
+    }
+
+    const groupId = String(req.body?.groupId || '').trim();
+    const group = await groupForUser(req.userId, groupId);
+    if (!group) return res.status(403).json({ error: 'Você não participa dessa sala.' });
+    const { data: membership, error: memberError } = await supabase.from('group_members').select('role').eq('group_id', group.id).eq('user_id', req.userId).maybeSingle();
+    if (memberError) throw memberError;
+    if (!(membership?.role === 'owner' || membership?.role === 'admin' || group.created_by === req.userId)) {
+      return res.status(403).json({ error: 'Somente o criador ou um administrador pode alterar a meta da sala.' });
+    }
+    const { error: updateError } = await supabase.from('groups').update({ challenge_start: start, challenge_end: end }).eq('id', group.id);
+    if (updateError) throw updateError;
+    const state = await loadStateForUser(req.userId, 'group', group.id);
+    res.json({ ok: true, state, me: publicUser(await getUserById(req.userId), await getPrefs(req.userId)) });
+  } catch (e) {
+    console.error('Goal save failed:', e);
+    res.status(500).json({ error: e.message || 'Não foi possível salvar o período da meta.' });
+  }
+});
+
 app.post('/api/settings/workspace-default', requireAuth, async (req, res) => {
   try {
     const mode = String(req.body?.defaultWorkspace || '').trim().toLowerCase();
@@ -1335,6 +1388,89 @@ app.post('/api/group/join', requireAuth, async (req, res) => {
   } catch (e) {
     console.error('Group join failed:', e);
     res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/group/manage', requireAuth, async (req, res) => {
+  try {
+    const supabase = requireSupabase();
+    const groupId = String(req.body?.groupId || '').trim();
+    const action = String(req.body?.action || '').trim().toLowerCase();
+    if (!groupId) return res.status(400).json({ error: 'Sala inválida.' });
+    const { data: group, error: groupError } = await supabase.from('groups').select('*').eq('id', groupId).maybeSingle();
+    if (groupError) throw groupError;
+    if (!group) return res.status(404).json({ error: 'Esta sala não existe mais.' });
+    const { data: membership, error: membershipError } = await supabase.from('group_members').select('role').eq('group_id', groupId).eq('user_id', req.userId).maybeSingle();
+    if (membershipError) throw membershipError;
+    if (!membership) return res.status(403).json({ error: 'Você não participa desta sala.' });
+    const isOwner = membership.role === 'owner' || group.created_by === req.userId;
+    const canManage = isOwner || membership.role === 'admin';
+
+    if (action === 'delete') {
+      if (!isOwner) return res.status(403).json({ error: 'Somente o criador pode excluir a sala permanentemente.' });
+      // The schema cascades group_members and group_invites; active_group_id is SET NULL.
+      // day_records are user-owned, not group-owned, and are intentionally preserved.
+      const { error } = await supabase.from('groups').delete().eq('id', groupId);
+      if (error) throw error;
+      const state = await loadStateForUser(req.userId, 'personal');
+      return res.json({ ok: true, deleted: true, state, me: publicUser(await getUserById(req.userId), await getPrefs(req.userId)) });
+    }
+
+    if (action === 'update') {
+      if (!canManage) return res.status(403).json({ error: 'Você não tem permissão para editar esta sala.' });
+      const name = String(req.body?.name || '').trim().slice(0, 60);
+      const visibility = String(req.body?.visibility || '').trim().toLowerCase();
+      if (name.length < 2) return res.status(400).json({ error: 'O nome deve ter pelo menos 2 caracteres.' });
+      if (!['public', 'private'].includes(visibility)) return res.status(400).json({ error: 'Escolha uma visibilidade válida.' });
+      const { error } = await supabase.from('groups').update({ name, visibility }).eq('id', groupId);
+      if (error) throw error;
+    } else if (action === 'rotate-code') {
+      if (!canManage) return res.status(403).json({ error: 'Você não pode gerenciar os convites desta sala.' });
+      let code = '';
+      for (let attempt = 0; attempt < 5; attempt++) {
+        code = crypto.randomBytes(5).toString('hex').toUpperCase();
+        const { data: existing, error: checkError } = await supabase.from('groups').select('id').eq('invite_code', code).maybeSingle();
+        if (checkError) throw checkError;
+        if (!existing) break;
+        code = '';
+      }
+      if (!code) return res.status(503).json({ error: 'Não foi possível gerar um código único. Tente novamente.' });
+      const { error } = await supabase.from('groups').update({ invite_code: code }).eq('id', groupId);
+      if (error) throw error;
+    } else if (action === 'set-role') {
+      if (!isOwner) return res.status(403).json({ error: 'Somente o criador pode alterar funções administrativas.' });
+      const userId = String(req.body?.userId || '').trim();
+      const role = String(req.body?.role || '').trim().toLowerCase();
+      if (!userId || !['admin', 'member'].includes(role)) return res.status(400).json({ error: 'Participante ou função inválida.' });
+      if (userId === req.userId || userId === group.created_by) return res.status(400).json({ error: 'A função do criador não pode ser alterada aqui.' });
+      const { data: target, error: targetError } = await supabase.from('group_members').select('role').eq('group_id', groupId).eq('user_id', userId).maybeSingle();
+      if (targetError) throw targetError;
+      if (!target) return res.status(404).json({ error: 'Esse participante já não está na sala.' });
+      const { error: roleError } = await supabase.from('group_members').update({ role }).eq('group_id', groupId).eq('user_id', userId);
+      if (roleError) throw roleError;
+    } else if (action === 'remove-member') {
+      if (!canManage) return res.status(403).json({ error: 'Você não tem permissão para gerenciar participantes.' });
+      const userId = String(req.body?.userId || '').trim();
+      if (!userId) return res.status(400).json({ error: 'Participante inválido.' });
+      if (userId === req.userId || userId === group.created_by) return res.status(400).json({ error: 'O criador não pode ser removido desta forma.' });
+      const { data: target, error: targetError } = await supabase.from('group_members').select('role').eq('group_id', groupId).eq('user_id', userId).maybeSingle();
+      if (targetError) throw targetError;
+      if (!target) return res.status(404).json({ error: 'Esse participante já não está na sala.' });
+      if (!isOwner && target.role !== 'member') return res.status(403).json({ error: 'Administradores só podem remover participantes comuns.' });
+      const { error: removeError } = await supabase.from('group_members').delete().eq('group_id', groupId).eq('user_id', userId);
+      if (removeError) throw removeError;
+      const { error: clearActiveError } = await supabase.from('app_users').update({ active_group_id: null }).eq('id', userId).eq('active_group_id', groupId);
+      if (clearActiveError) throw clearActiveError;
+    } else {
+      return res.status(400).json({ error: 'Ação de gerenciamento desconhecida.' });
+    }
+
+    const state = await loadStateForUser(req.userId, 'group', groupId);
+    await broadcastGroup(groupId);
+    return res.json({ ok: true, state, me: publicUser(await getUserById(req.userId), await getPrefs(req.userId)) });
+  } catch (e) {
+    console.error('Group management failed:', e);
+    res.status(500).json({ error: e.message || 'Não foi possível gerenciar a sala.' });
   }
 });
 
