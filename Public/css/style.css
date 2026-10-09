@@ -636,3 +636,77 @@ html.theme-transition *,html.theme-transition *::before,html.theme-transition *:
 #page-home .home-moment-card .stat .v{font-size:clamp(20px,2.5vw,27px);letter-spacing:-.04em}
 #page-home .home-moment-card .stat .l{font-size:9px;line-height:1.35}
 @media(max-width:700px){.quick-actions{grid-template-columns:1fr;gap:7px}.quick-action{min-height:58px}.quick-action-arrow{align-self:center}#page-home .home-moment-card .grid3{grid-template-columns:repeat(3,minmax(0,1fr))}#page-home .home-moment-card .stat{padding:9px 7px}}
+
+
+/* Shape Together: compact remembered-room banner and accessible room selector */
+.workspace-home-banner.is-group{padding:11px 13px;gap:12px;border-radius:16px;margin-bottom:16px}
+.workspace-home-main{align-items:center;gap:10px}
+.workspace-home-mark{width:38px;height:38px;flex-basis:38px;border-radius:12px}
+.workspace-home-mark .icon{width:19px;height:19px}
+.workspace-home-copy{gap:3px}
+.workspace-home-copy h2{font-size:clamp(15px,1.7vw,19px);line-height:1.15;letter-spacing:-.035em}
+.workspace-home-kicker{font-size:8px;letter-spacing:.12em}
+.workspace-home-status{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin-top:2px;font-size:9px}
+.workspace-room-member-count{display:inline-flex;align-items:center;gap:4px;color:var(--muted)}
+.workspace-room-member-count .icon{width:12px;height:12px}
+.workspace-room-member-count b{font-size:9px;color:var(--text)}
+.workspace-room-visibility{display:inline-flex;align-items:center;gap:5px;color:var(--muted);font-weight:800}
+.workspace-room-visibility i{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--success)}
+.workspace-room-visibility.is-private i{background:var(--warn)}
+.workspace-home-actions{gap:6px;align-items:center}
+.workspace-home-actions .workspace-home-secondary{min-height:36px;height:36px;padding:0 10px;border-radius:11px;white-space:nowrap;font-size:10px}
+.workspace-home-actions .workspace-home-secondary .icon{width:14px;height:14px}
+.workspace-trigger{height:36px;min-width:112px;max-width:180px;padding:0 8px;gap:6px;border-radius:11px}
+.workspace-trigger-icon{width:23px;height:23px;border-radius:8px}
+.workspace-trigger-copy b{font-size:10px;max-width:104px}
+.workspace-trigger-chevron{display:grid;place-items:center;margin-left:auto;color:var(--muted)}
+.workspace-trigger-chevron .icon{width:15px;height:15px;transition:transform .18s ease}
+.workspace-trigger[aria-expanded="true"] .workspace-trigger-chevron .icon{transform:rotate(180deg)}
+.workspace-menu{max-height:min(68vh,520px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+.workspace-menu::-webkit-scrollbar{width:6px}
+.workspace-menu::-webkit-scrollbar-thumb{background:var(--line2);border-radius:20px}
+.workspace-menu::-webkit-scrollbar-track{background:transparent}
+.workspace-item{flex:0 0 auto}
+.workspace-home-banner.is-remembered-group .workspace-home-open-room{border-color:var(--accentLine)}
+@media(max-width:640px){
+ .workspace-home-banner.is-group{align-items:flex-start;padding:10px;gap:8px}
+ .workspace-home-main{gap:8px}
+ .workspace-home-mark{width:33px;height:33px;flex-basis:33px;border-radius:10px}
+ .workspace-home-copy h2{font-size:15px}
+ .workspace-home-status{gap:7px}
+ .workspace-home-actions{gap:5px;flex-wrap:wrap;justify-content:flex-end}
+ .workspace-trigger{min-width:90px;max-width:132px}
+ .workspace-trigger-copy b{max-width:65px}
+ .workspace-home-actions .workspace-home-secondary{height:33px;min-height:33px;padding:0 8px;font-size:9px}
+ .workspace-menu{right:-2px;width:min(300px,calc(100vw - 20px))}
+}
+/* Group calendar: own status stays prominent; peers fit neatly inside the same day cell. */
+.calendar-day-primary{display:flex;align-items:center;gap:4px;min-width:0;line-height:1.1}
+.calendar-day-status-label{font-size:8px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.calendar-day-primary .dot{width:7px;height:7px;flex:0 0 7px}
+.dot.no-record{background:transparent;border:1px solid var(--line2);box-sizing:border-box}
+.day.day-group{min-height:calc(66px + var(--members-height,0px));justify-content:flex-start;gap:6px;padding:6px 5px;overflow:hidden}
+.day.day-group .num{flex:0 0 auto}
+.day.day-group .calendar-day-primary{flex:0 0 auto}
+.calendar-member-dots{display:grid;grid-template-columns:repeat(var(--members-cols,1),minmax(0,1fr));gap:2px;align-content:start;justify-items:center;align-items:center;width:100%;max-width:100%;min-width:0;overflow:hidden}
+.calendar-member-dot{display:block;width:var(--dot-size,4px);height:var(--dot-size,4px);min-width:0;min-height:0;border-radius:50%;box-sizing:border-box;max-width:100%;max-height:100%}
+.calendar-member-dot.red{background:var(--danger)}
+.calendar-member-dot.blue{background:var(--rest)}
+.calendar-member-dot.orange{background:var(--warn)}
+.calendar-member-dot.green{background:var(--success)}
+.calendar-member-dot.no-record{background:var(--panel2);border:1px solid var(--line2)}
+.day.day-group .calendar-day-status-label{font-size:8px}
+@media(max-width:520px){
+ .calendar-grid{gap:3px}
+ .day.day-group{padding:5px 3px;gap:5px;border-radius:10px}
+ .day.day-group .num{font-size:10px}
+ .day.day-group .calendar-day-status-label{font-size:7px}
+ .calendar-member-dots{gap:1px}
+}
+/* First progress chart: compare room members while keeping the signed-in user emphasized. */
+.week-line-comparison-user{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;opacity:.24}
+.week-chart-members{display:flex;align-items:center;flex-wrap:wrap;gap:5px 10px;padding:7px 4px 4px}
+.week-chart-member{display:inline-flex;align-items:center;gap:5px;min-width:0;color:var(--muted);font-size:9px;font-weight:800;max-width:100%}
+.week-chart-member>i{width:7px;height:7px;border-radius:50%;flex:0 0 7px}
+.week-chart-member>span{overflow-wrap:anywhere}
+.week-point-comparison{vector-effect:non-scaling-stroke}
