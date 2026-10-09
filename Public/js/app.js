@@ -198,17 +198,17 @@ function navHtml(){const side=$('sideNav'),mobile=$('mobileNav');side.innerHTML=
 
 function setPage(p,alreadyRendered=false){if(!PAGES[p])p='home';page=p;if(p==='group'&&!alreadyRendered)renderGroup();document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active',el.id==='page-'+p));document.querySelectorAll('[data-page]').forEach(el=>el.classList.toggle('active',el.dataset.page===p));$('topTitle').textContent=PAGES[p][0];$('topSub').textContent=workspaceMode==='group'&&state?.group?`Sala · ${state.group.name}`:PAGES[p][1];const activePage=$('page-'+p);activePage?.querySelectorAll('.card').forEach((el,i)=>el.style.setProperty('--card-i',i));window.scrollTo({top:0,behavior:'smooth'})}
 
-function renderApp(){workspaceMode=state?.workspaceMode||(state?.group?'group':'personal');renderHome();renderCalendar();renderProgress();renderNotes();renderGroup();navHtml();bindSectionInfoButtons();bindGoalButtons();setPage(page,true)}
+function renderApp(){workspaceMode=state?.workspaceMode==='group'&&state?.group?'group':'personal';renderHome();renderCalendar();renderProgress();renderNotes();renderGroup();navHtml();bindSectionInfoButtons();bindGoalButtons();setPage(page,true)}
 
 function renderHome(){
  const me=current(),s=monthStats(me.id),p=progress(me.id),c=challenge(),rec=state.days[me.id]?.[today()],status=rec?STATUS[rec.status]:null;
  const isGroup=workspaceMode==='group'&&state.group,group=state.group,users=state.users||[],good=s.green,range=goalRange();
  const pageHome=$('page-home');pageHome.dataset.workspace=isGroup?'group':'personal';const canRegisterToday=canEdit(today(),me.id);const todayActionLabel=today()<range.start?'Meta ainda não começou':today()>range.end?'Meta encerrada':status?'Editar hoje':'Registrar hoje';
  pageHome.innerHTML=`
- <section class="workspace-home-banner ${isGroup?'is-group':'is-personal'}" aria-label="Espaço atual">
-  <div class="workspace-home-main"><div class="workspace-home-mark">${icon(isGroup?'group':'profile')}</div><div class="workspace-home-copy"><div class="workspace-home-kicker">${isGroup?'SALA ATIVA':'ESPAÇO PESSOAL'}</div><h2>${isGroup?esc(group.name):'Pessoal'}</h2><span class="workspace-home-status">${isGroup?`${icon('group')} ${users.length} ${users.length===1?'participante':'participantes'} · ${group.visibility==='private'?'Privada':'Pública'}`:`${icon('lock')} Privado`}</span></div></div>
-  <div class="workspace-home-actions"><div id="workspaceMount" class="workspace-mount"></div>${isGroup?'<button id="workspacePersonalQuick" class="workspace-home-secondary" type="button">'+icon('profile')+'<span>Voltar ao pessoal</span></button>':'<button id="workspaceBrowseRooms" class="workspace-home-primary" type="button">'+icon('group')+'<span>Salas</span></button>'}</div>
- </section>
+ ${isGroup?`<section class="workspace-home-banner is-group" aria-label="Sala ativa">
+  <div class="workspace-home-main"><div class="workspace-home-mark">${icon('group')}</div><div class="workspace-home-copy"><div class="workspace-home-kicker">SALA ATIVA</div><h2>${esc(group.name)}</h2><span class="workspace-home-status">${icon('group')} ${users.length} ${users.length===1?'participante':'participantes'} · ${group.visibility==='private'?'Privada':'Pública'}</span></div></div>
+  <div class="workspace-home-actions"><div id="workspaceMount" class="workspace-mount"></div><button id="workspacePersonalQuick" class="workspace-home-secondary" type="button">${icon('profile')}<span>Voltar ao pessoal</span></button></div>
+ </section>`:''}
  <div class="head"><div><div class="eyebrow">${isGroup?'Sala':'Pessoal'} · Meta ${displayDate(range.start)} – ${displayDate(range.end)}</div><h1>${isGroup?'Evoluam juntos.':'Seu espaço, seu ritmo.'}</h1><p>${isGroup?'O progresso compartilhado desta sala.':'Seus registros pessoais, em um só lugar.'}</p></div><button class="goal-edit-button" type="button" data-edit-goal>${icon('calendar')}<span>Meta</span></button></div>
  <div class="home-focus"><div class="card hero home-streak"><div class="eyebrow">${today()<range.start?'A meta ainda não começou':today()>range.end?'Meta encerrada':`Dia ${Math.max(1,c.elapsed)} de ${c.total}`}</div><h2>${esc(me.name.split(' ')[0])}, continue no ritmo.</h2><p>${status?`Hoje: ${esc(status.label)}${rec.note?' · '+esc(rec.note):''}`:'Registre como foi seu dia.'}</p><div class="progress-track"><i style="width:${c.percent}%"></i></div><div class="hero-actions"><button id="homeToday" class="primary" ${canRegisterToday?'':'disabled aria-disabled="true"'} style="height:42px;padding:0 14px">${todayActionLabel}</button><button id="homeCalendar" class="soft">Calendário</button></div></div>
  <div class="card home-moment-card"><div class="eyebrow">${isGroup?'Resumo da sala':'Seu momento'}</div><div class="grid3" style="margin-top:12px"><div class="stat"><div class="v">${p.score}</div><div class="l">evolução / 100</div></div><div class="stat"><div class="v">${p.registered}</div><div class="l">dias registrados</div></div><div class="stat"><div class="v">${good}</div><div class="l">treinos bons</div></div></div><div class="quick-actions"><button id="homeProgress" class="quick-action" type="button"><span class="quick-action-icon">${icon('chart')}</span><span class="quick-action-copy"><b>Progressão</b><small>Evolução diária</small></span><span class="quick-action-arrow">↗</span></button><button id="homeNotes" class="quick-action" type="button"><span class="quick-action-icon">${icon('notes')}</span><span class="quick-action-copy"><b>Anotações</b><small>${isGroup?'Sala':'Privado'}</small></span><span class="quick-action-arrow">↗</span></button><button id="homeRoom" class="quick-action" type="button"><span class="quick-action-icon">${icon('group')}</span><span class="quick-action-copy"><b>${isGroup?'Sala':'Salas'}</b><small>${isGroup?'Participantes':'Pesquisar'}</small></span><span class="quick-action-arrow">↗</span></button></div></div></div>
@@ -350,20 +350,32 @@ function drawMap(container,primaryId,otherIds){
    let segment=[];
    function addSegment(pts){
      if(pts.length===1){
-       s+='<circle class="map-point" style="animation-delay:'+((pts[0].index)*22)+'ms" cx="'+pts[0].x+'" cy="'+pts[0].y+'" r="'+(primary?5:3.5)+'" fill="'+color+'" opacity="'+(primary?.9:.22)+'"/>';
+       const pointColor=primary?statusColor[pts[0].status]:color;
+       s+='<circle class="map-point" style="animation-delay:'+((pts[0].index)*22)+'ms" cx="'+pts[0].x+'" cy="'+pts[0].y+'" r="'+(primary?5:3.5)+'" fill="'+pointColor+'" opacity="'+(primary?.9:.22)+'"/>';
        return;
      }
      const pointsString=pts.map(function(p){return p.x+','+p.y;}).join(' ');
      const closesShape=pts[0].index===0 && pts[pts.length-1].index===n-1;
      const linePoints=closesShape ? pointsString+' '+pts[0].x+','+pts[0].y : pointsString;
-     s+='<polyline class="map-line '+(primary?'map-line-primary':'map-line-comparison')+'" points="'+linePoints+'" stroke="'+color+'" stroke-width="'+(primary?3.5:2.2)+'" '+(primary?'':'stroke-dasharray="6 7"')+' opacity="'+(primary?.92:.30)+'"/>';
-     if(primary && closesShape)s+='<polygon points="'+linePoints+'" fill="url(#primaryFill)" opacity=".9"/>';
+     // Paint the filled area first; drawing it afterward was covering the
+     // hexagon's progress line and making parts look cut off.
+     if(primary && closesShape)s+='<polygon points="'+linePoints+'" fill="url(#primaryFill)" opacity=".65"/>';
+     if(primary){
+       const edgeCount=pts.length-1+(closesShape?1:0);
+       for(let i=0;i<edgeCount;i++){
+         const from=pts[i],to=i===pts.length-1?pts[0]:pts[i+1];
+         const edgeColor=statusColor[to.status]||color;
+         s+='<line class="map-line map-line-primary" x1="'+from.x+'" y1="'+from.y+'" x2="'+to.x+'" y2="'+to.y+'" stroke="'+edgeColor+'" stroke-width="3.5" opacity=".92"/>';
+       }
+     }else{
+       s+='<polyline class="map-line map-line-comparison" points="'+linePoints+'" stroke="'+color+'" stroke-width="2.2" stroke-dasharray="6 7" opacity=".30"/>';
+     }
      pts.forEach(function(pt){
-       const delay=pt.index*22;
+       const delay=pt.index*22,pointColor=primary?statusColor[pt.status]:color;
        s+='<g class="map-point" style="animation-delay:'+delay+'ms">'+
           '<title>'+pt.date.split('-').reverse().join('/')+' · '+STATUS[pt.status].label+'</title>'+
-          '<circle cx="'+pt.x+'" cy="'+pt.y+'" r="'+(primary?6.5:4.7)+'" fill="'+color+'" opacity="'+(primary?.3:.14)+'" filter="url(#mapGlow)"/>'+
-          '<circle class="map-status-dot" cx="'+pt.x+'" cy="'+pt.y+'" r="'+(primary?4:3)+'" fill="'+statusColor[pt.status]+'" stroke="'+color+'" stroke-width="'+(primary?1.8:1.2)+'" opacity="'+(primary?.98:.5)+'"/>'+
+          '<circle cx="'+pt.x+'" cy="'+pt.y+'" r="'+(primary?6.5:4.7)+'" fill="'+pointColor+'" opacity="'+(primary?.3:.14)+'" filter="url(#mapGlow)"/>'+
+          '<circle class="map-status-dot" cx="'+pt.x+'" cy="'+pt.y+'" r="'+(primary?4:3)+'" fill="'+statusColor[pt.status]+'" stroke="'+pointColor+'" stroke-width="'+(primary?1.8:1.2)+'" opacity="'+(primary?.98:.5)+'"/>'+
           '</g>';
      });
    }
@@ -374,7 +386,10 @@ function drawMap(container,primaryId,otherIds){
      // O ponto de cada dia é projetado sobre a mesma família de hexágonos do grid.
      // Assim, 3/6/10 ficam exatamente sobre os anéis correspondentes, em vez de
      // parecerem deslocados para uma área vazia.
-     const edge=hexPoint(R,a),rr=v/10;
+     const edge=hexPoint(R,a);
+     // Reserve the center for the score badge. A small minimum display radius
+     // keeps 0-point (red) segments from running underneath the inner hexagon.
+     const rr=Math.min(0.94,Math.max(v/10,0.28));
      const pt={x:c+(edge.x-c)*rr,y:c+(edge.y-c)*rr,status:status,date:date,index:i};
      if(segment.length===0 || i===segment[segment.length-1].index+1)segment.push(pt);
      else{addSegment(segment);segment=[pt];}
@@ -385,9 +400,13 @@ function drawMap(container,primaryId,otherIds){
  const primary=state.users.find(function(u){return u.id===primaryId;})||current();
  draw(primary,true);
  const score=progress(primary.id).score;
- const dash=Math.max(1,Math.round(score*.62));
- s+='<polygon points="'+hexGrid(40)+'" fill="var(--panel)" stroke="var(--accent)" stroke-width="1.5" opacity=".97"/>'+
-    '<polygon points="'+hexGrid(33)+'" fill="none" stroke="var(--accent)" stroke-width="4" stroke-dasharray="'+dash+' 200" stroke-linecap="round" transform="rotate(-90 '+c+' '+c+')" opacity=".28"/>'+
+ const primaryDays=state.days[primary.id]||{};
+ const latestStatus=[...dates].reverse().map(date=>primaryDays[date]?.status).find(Boolean);
+ const statusStroke=latestStatus?statusColor[latestStatus]:'var(--line2)';
+ const ringRadius=35,ringLength=6*ringRadius,ringDash=ringLength*score/100;
+ s+='<polygon points="'+hexGrid(42)+'" fill="var(--panel)" stroke="'+statusStroke+'" stroke-width="2" opacity=".98"/>'+
+    '<polygon points="'+hexGrid(ringRadius)+'" fill="none" stroke="var(--line2)" stroke-width="3.2" opacity=".8"/>'+
+    (ringDash>0?'<polygon points="'+hexGrid(ringRadius)+'" fill="none" stroke="'+statusStroke+'" stroke-width="3.2" stroke-dasharray="'+ringDash.toFixed(2)+' '+Math.max(.01,ringLength-ringDash).toFixed(2)+'" stroke-linecap="round" transform="rotate(-90 '+c+' '+c+')"/>':'')+
     '<text x="'+c+'" y="'+(c-1)+'" text-anchor="middle" class="map-center-score">'+score+'<tspan class="map-center-sub" x="'+c+'" dy="13">/100</tspan></text></svg>';
  container.innerHTML=s;
 }
