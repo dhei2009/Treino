@@ -170,3 +170,129 @@ html.theme-transition *,html.theme-transition *::before,html.theme-transition *:
 .room-create-form{display:grid;gap:8px;max-width:620px}.room-create-form label{font-size:11px;font-weight:850;margin-top:5px}.room-help{font-size:10px;color:var(--muted);line-height:1.5;margin:2px 0 8px}
 .room-current-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.room-current-top>div{min-width:0}.room-invite{margin:15px 0}.room-member-heading{display:flex;align-items:center;justify-content:space-between;font-size:12px;margin:14px 0 8px}.room-member-heading span{font-size:10px;color:var(--muted);border-radius:999px;background:var(--panel2);padding:4px 8px}.room-members{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.room-member{display:flex;align-items:center;gap:9px;min-width:0;border:1px solid var(--line);border-radius:12px;padding:9px}.room-member>div:last-child{min-width:0}.room-member b{display:block;font-size:10px;overflow-wrap:anywhere}.room-member small{display:block;font-size:9px;color:var(--muted);margin-top:3px}
 @media(max-width:700px){.room-panel,.room-current{padding:14px}.room-tabs{gap:3px}.room-tab{font-size:10px;padding:8px 4px}.room-search-row{grid-template-columns:minmax(0,1fr) auto}.room-search-row .primary{padding:0 11px}.room-current-top{flex-direction:column}.room-members{grid-template-columns:1fr}.room-card{padding:9px;gap:8px}.room-card-mark{width:34px;height:34px;flex-basis:34px}.room-card-action{padding:0 9px}}
+
+
+/* Shape Together — refinamento visual da experiência Salas */
+#page-group .head{margin-bottom:18px}
+#page-group .head h1{font-size:clamp(25px,4vw,32px);letter-spacing:-.055em}
+#page-group .head p{max-width:560px;font-size:13px;line-height:1.65}
+#page-group .room-tabs{
+ display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;
+ margin:0 0 16px;padding:0;border:0;border-bottom:1px solid var(--line);
+ border-radius:0;background:transparent;overflow:visible
+}
+#page-group .room-tab{
+ position:relative;min-height:48px;padding:12px 8px;border:0;border-radius:0;
+ background:transparent;color:var(--muted);font-size:12px;font-weight:750;
+ transition:color .18s,background .18s
+}
+#page-group .room-tab:hover{background:var(--panel2);color:var(--text)}
+#page-group .room-tab.active{
+ color:var(--accentStrong);background:transparent;border:0;box-shadow:none
+}
+#page-group .room-tab.active:after{
+ content:"";position:absolute;bottom:-1px;left:12%;right:12%;height:3px;
+ border-radius:3px 3px 0 0;background:var(--accent)
+}
+#page-group .room-panel,#page-group .room-current{
+ padding:clamp(16px,3vw,24px);margin-bottom:16px;
+ border:1px solid color-mix(in srgb,var(--accent) 10%,var(--line));
+ border-radius:20px;background:var(--panel);
+ box-shadow:0 8px 26px rgba(26,70,130,.045)
+}
+#page-group .room-section-head{align-items:center;margin-bottom:17px}
+#page-group .room-section-head .eyebrow,
+#page-group .room-current .eyebrow{font-size:10px;letter-spacing:.09em;font-weight:850;text-transform:uppercase;color:var(--accentStrong)}
+#page-group .room-section-head h2,#page-group .room-current h2{
+ font-size:clamp(18px,2.4vw,22px);letter-spacing:-.045em;margin:5px 0 6px
+}
+#page-group .room-section-head p,#page-group .room-current p{
+ font-size:12px;line-height:1.6;max-width:620px
+}
+#page-group .room-search-row{gap:9px;margin:16px 0}
+#page-group .room-search-row input,#page-group .room-create-form input,
+#page-group .room-create-form select{
+ height:48px;padding:0 14px;border-radius:13px;background:var(--panel);
+ border:1px solid var(--line);font-size:13px;transition:border-color .18s,box-shadow .18s
+}
+#page-group .room-search-row input:focus,#page-group .room-create-form input:focus,
+#page-group .room-create-form select:focus{
+ border-color:var(--accent);box-shadow:0 0 0 4px var(--accentGlow)
+}
+#page-group .room-search-row .primary,#page-group .room-create-form .primary{
+ min-height:46px;border-radius:12px;padding:0 19px;font-size:12px;font-weight:800;
+ box-shadow:0 4px 12px color-mix(in srgb,var(--accent) 18%,transparent)
+}
+#page-group .room-list{display:grid;gap:10px;margin-top:13px}
+#page-group .room-card{
+ display:flex;align-items:center;gap:12px;padding:13px;
+ border:1px solid var(--line);border-radius:15px;background:var(--panel);
+ transition:transform .16s,border-color .16s,box-shadow .16s
+}
+#page-group .room-card:hover{
+ transform:translateY(-1px);border-color:color-mix(in srgb,var(--accent) 45%,var(--line));
+ box-shadow:0 7px 18px rgba(28,75,135,.07)
+}
+#page-group .room-card-mark{
+ width:44px;height:44px;flex:0 0 44px;border-radius:13px;
+ display:grid;place-items:center;background:var(--accentSoft);color:var(--accentStrong)
+}
+#page-group .room-card-mark .icon{width:21px;height:21px}
+#page-group .room-card-copy b{font-size:13px;font-weight:800;line-height:1.35}
+#page-group .room-card-copy small{font-size:11px;line-height:1.5;margin-top:5px}
+#page-group .room-card-action{min-height:36px;border-radius:10px;padding:0 14px;font-size:11px;font-weight:800}
+#page-group .room-empty{
+ padding:24px 16px;border:1px dashed var(--line);border-radius:14px;
+ color:var(--muted);background:var(--panel2);font-size:12px;line-height:1.6;text-align:center
+}
+#page-group .room-divider{
+ height:1px;background:var(--line);margin:23px 0;position:relative
+}
+#page-group .room-divider:after{
+ content:"OU";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+ padding:0 12px;background:var(--panel);color:var(--muted);font-size:10px;font-weight:850;letter-spacing:.08em
+}
+#page-group .room-create-form{display:grid;gap:9px}
+#page-group .room-create-form label{font-size:12px;font-weight:800;margin-top:5px}
+#page-group .room-create-form .room-help{
+ margin:4px 0 9px;color:var(--muted);font-size:11px;line-height:1.6
+}
+#page-group .room-current{border-color:color-mix(in srgb,var(--accent) 25%,var(--line))}
+#page-group .room-current-top{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+#page-group .room-current-top .soft{flex-shrink:0;border-radius:11px;font-size:11px;font-weight:750}
+#page-group .room-invite{
+ display:flex;align-items:center;justify-content:space-between;gap:12px;
+ margin-top:17px;padding:13px 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel2)
+}
+#page-group .room-invite b{display:block;font-size:11px}
+#page-group .room-invite span{display:block;margin-top:5px;font-size:14px;font-weight:850;letter-spacing:.12em;color:var(--accentStrong);overflow-wrap:anywhere}
+#page-group .room-member-heading{
+ display:flex;align-items:center;justify-content:space-between;margin:21px 0 10px;
+ font-size:12px
+}
+#page-group .room-member-heading span{
+ display:grid;place-items:center;min-width:25px;height:25px;padding:0 7px;border-radius:20px;
+ background:var(--accentSoft);color:var(--accentStrong);font-size:11px;font-weight:850
+}
+#page-group .room-members{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+#page-group .room-member{
+ display:flex;align-items:center;gap:10px;min-width:0;padding:10px;
+ border:1px solid var(--line);border-radius:13px;background:var(--panel2)
+}
+#page-group .room-member .group-avatar{width:36px;height:36px;flex:0 0 36px}
+#page-group .room-member>div:last-child{min-width:0}
+#page-group .room-member b{display:block;font-size:11px;line-height:1.4;overflow-wrap:anywhere}
+#page-group .room-member small{display:block;margin-top:3px;color:var(--muted);font-size:10px}
+@media(max-width:520px){
+ #page-group .room-panel,#page-group .room-current{padding:15px;border-radius:17px}
+ #page-group .room-tab{font-size:11px;padding:10px 4px}
+ #page-group .room-search-row{grid-template-columns:minmax(0,1fr) auto;gap:7px}
+ #page-group .room-search-row input{min-width:0;padding:0 10px;font-size:12px}
+ #page-group .room-search-row .primary{padding:0 12px}
+ #page-group .room-card{gap:10px;padding:10px}
+ #page-group .room-card-mark{width:39px;height:39px;flex-basis:39px}
+ #page-group .room-card-action{padding:0 10px}
+ #page-group .room-members{grid-template-columns:minmax(0,1fr)}
+ #page-group .room-current-top{flex-direction:column}
+ #page-group .room-invite{align-items:flex-start;flex-direction:column}
+}
