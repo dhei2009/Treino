@@ -7,7 +7,7 @@ const PAGES={home:['Início','Sua visão geral'],calendar:['Calendário','Meta e
 const NAV=[['home','Início','home'],['calendar','Calendário','calendar'],['progress','Progressão','chart'],['notes','Anotações','notes'],['group','Sala','group']];
 let online=false,googleEnabled=false,currentUser=null,state=null,page='home',workspaceMode='personal',workspaceMenuOpen=false,calendarDate=new Date(),calendarMemberId=null,selectedDate=null,selectedStatus=null,appearanceTrigger=null,compareIds=new Set(),savingDay=false,savingProfile=false,workspaceDialogMode='create',workspaceBusy=false,roomManageBusy=false,goalSaving=false,roomTab='explore',roomPublicRooms=[],roomPublicLoaded=false,roomSearchQuery='',roomSearchTimer=null,roomSearchRequestId=0;
 const $=id=>document.getElementById(id);
-function icon(name){const c='class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"';const p={home:`<svg ${c}><path d="M3 10.8 12 3l9 7.8"/><path d="M5.5 9.5v10h13v-10"/><path d="M9.5 19.5v-6h5v6"/></svg>`,calendar:`<svg ${c}><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4M17 3v4M3 9h18"/></svg>`,chart:`<svg ${c}><path d="m4 16 4-4 4 3 7-8"/><path d="M4 20h16"/></svg>`,notes:`<svg ${c}><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>`,group:`<svg ${c}><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.4"/><path d="M3.8 19c.7-3.1 2.4-4.7 5.2-4.7s4.5 1.6 5.2 4.7"/><path d="M14.5 14.7c2.7 0 4.3 1.3 4.9 3.8"/></svg>`,moon:`<svg ${c}><path d="M20.2 15.3A8.4 8.4 0 0 1 8.7 3.8 8.4 8.4 0 1 0 20.2 15.3Z"/></svg>`,sun:`<svg ${c}><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>`,plus:`<svg ${c}><path d="M12 5v14M5 12h14"/></svg>`,image:`<svg ${c}><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="m5.5 17 4.2-4 3.2 3 2.2-2.1L20 17"/></svg>`,logout:`<svg ${c}><path d="M10 5H5v14h5"/><path d="m14 8 4 4-4 4"/><path d="M9 12h9"/></svg>`,profile:`<svg ${c}><circle cx="12" cy="8" r="3.2"/><path d="M5 20c.8-3.8 3.1-5.7 7-5.7s6.2 1.9 7 5.7"/></svg>`,lock:`<svg ${c}><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><path d="M12 14v3"/></svg>`,appearance:`<svg ${c}><circle cx="12" cy="12" r="3.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>`,account:`<svg ${c}><circle cx="12" cy="8" r="3"/><path d="M4.5 20c.7-3.7 3.2-5.5 7.5-5.5s6.8 1.8 7.5 5.5"/></svg>`,left:`<svg ${c}><path d="m15 18-6-6 6-6"/></svg>`,right:`<svg ${c}><path d="m9 18 6-6-6-6"/></svg>`,info:`<svg ${c}><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.5h.01"/></svg>`,settings:`<svg ${c}><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.4 1.1-1.5 2.6-1.7-.6a8 8 0 0 1-1.6.9l-.3 1.8h-3l-.3-1.8a8 8 0 0 1-1.6-.9l-1.7.6-1.5-2.6 1.4-1.1a7 7 0 0 1 0-1.9l-1.4-1.1 1.5-2.6 1.7.6a8 8 0 0 1 1.6-.9l.3-1.8h3l.3 1.8a8 8 0 0 1 1.6.9l1.7-.6 1.5 2.6-1.4 1.1a7 7 0 0 1 0 1.8Z"/></svg>`};return p[name]||''}
+function icon(name){const c='class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"';const p={home:`<svg ${c}><path d="M3 10.8 12 3l9 7.8"/><path d="M5.5 9.5v10h13v-10"/><path d="M9.5 19.5v-6h5v6"/></svg>`,calendar:`<svg ${c}><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4M17 3v4M3 9h18"/></svg>`,chart:`<svg ${c}><path d="m4 16 4-4 4 3 7-8"/><path d="M4 20h16"/></svg>`,notes:`<svg ${c}><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>`,group:`<svg ${c}><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.4"/><path d="M3.8 19c.7-3.1 2.4-4.7 5.2-4.7s4.5 1.6 5.2 4.7"/><path d="M14.5 14.7c2.7 0 4.3 1.3 4.9 3.8"/></svg>`,moon:`<svg ${c}><path d="M20.2 15.3A8.4 8.4 0 0 1 8.7 3.8 8.4 8.4 0 1 0 20.2 15.3Z"/></svg>`,sun:`<svg ${c}><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>`,plus:`<svg ${c}><path d="M12 5v14M5 12h14"/></svg>`,image:`<svg ${c}><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="m5.5 17 4.2-4 3.2 3 2.2-2.1L20 17"/></svg>`,logout:`<svg ${c}><path d="M10 5H5v14h5"/><path d="m14 8 4 4-4 4"/><path d="M9 12h9"/></svg>`,profile:`<svg ${c}><circle cx="12" cy="8" r="3.2"/><path d="M5 20c.8-3.8 3.1-5.7 7-5.7s6.2 1.9 7 5.7"/></svg>`,lock:`<svg ${c}><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><path d="M12 14v3"/></svg>`,appearance:`<svg ${c}><circle cx="12" cy="12" r="3.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>`,account:`<svg ${c}><circle cx="12" cy="8" r="3"/><path d="M4.5 20c.7-3.7 3.2-5.5 7.5-5.5s6.8 1.8 7.5 5.5"/></svg>`,left:`<svg ${c}><path d="m15 18-6-6 6-6"/></svg>`,right:`<svg ${c}><path d="m9 18 6-6-6-6"/></svg>`,chevron:`<svg ${c}><path d="m6 9 6 6 6-6"/></svg>`,info:`<svg ${c}><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.5h.01"/></svg>`,settings:`<svg ${c}><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.4 1.1-1.5 2.6-1.7-.6a8 8 0 0 1-1.6.9l-.3 1.8h-3l-.3-1.8a8 8 0 0 1-1.6-.9l-1.7.6-1.5-2.6 1.4-1.1a7 7 0 0 1 0-1.9l-1.4-1.1 1.5-2.6 1.7.6a8 8 0 0 1 1.6-.9l.3-1.8h3l.3 1.8a8 8 0 0 1 1.6.9l1.7-.6 1.5 2.6-1.4 1.1a7 7 0 0 1 0 1.8Z"/></svg>`};return p[name]||''}
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 function iso(y,m,d){return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`}
 function today(){const d=new Date();return iso(d.getFullYear(),d.getMonth(),d.getDate())}
@@ -88,6 +88,10 @@ function writeLocal(){state=normalizeLocal(state);localStorage.setItem(LOCAL_KEY
 const API_TIMEOUT_MS=15000;
 async function api(path,opts={}){const requestPath=path.startsWith('/api/')?path:path.replace(/^\/shape-together-api(?=\/)/,'/api');const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),API_TIMEOUT_MS);let r;try{const requestOpts={...opts,credentials:'include',signal:controller.signal,headers:{'Content-Type':'application/json',...(opts.headers||{})}};r=await fetch(requestPath,requestOpts)}catch(e){if(e?.name==='AbortError')throw Object.assign(new Error('O servidor demorou para responder. Verifique a conexão e tente novamente.'),{code:'TIMEOUT'});throw Object.assign(new Error('Não foi possível conectar ao servidor. Verifique a conexão e tente novamente.'),{code:'NETWORK'})}finally{clearTimeout(timer)}let data={};try{data=await r.json()}catch{}if(!r.ok){throw Object.assign(new Error(data.error||'O servidor não conseguiu concluir a solicitação.'),{status:r.status,code:data?.code||''})}return data}
 function workspaceGroups(){return Array.isArray(state?.groups)?state.groups:[]}
+function rememberedWorkspaceGroup(){
+ const groups=workspaceGroups();
+ return state?.group||groups.find(g=>g.id===state?.activeGroupId)||groups[groups.length-1]||null;
+}
 function activeWorkspaceGroup(){return state?.group||null}
 function workspaceLabel(){const g=activeWorkspaceGroup();return workspaceMode==='group'&&g?g.name:'Pessoal'}
 function setWorkspaceLoading(show,message='Abrindo espaço…'){
@@ -115,7 +119,7 @@ function workspaceEscapeTarget(){workspaceMenuOpen=false;const m=$('workspaceMen
 function renderWorkspaceSwitcher(){
  const mount=$('workspaceMount');if(!mount)return;
  const groups=workspaceGroups(),g=activeWorkspaceGroup();
- mount.innerHTML=`<div class="workspace-switcher"><button id="workspaceTrigger" class="workspace-trigger" type="button" aria-expanded="${workspaceMenuOpen?'true':'false'}"><span class="workspace-trigger-icon">${workspaceMode==='group'?icon('group'):icon('profile')}</span><span class="workspace-trigger-copy"><b>${esc(workspaceLabel())}</b></span><span class="workspace-trigger-chevron">⌄</span></button><div id="workspaceMenu" class="workspace-menu ${workspaceMenuOpen?'show':''}" role="menu"><button type="button" class="workspace-item ${workspaceMode==='personal'?'active':''}" data-workspace="personal"><span class="workspace-item-icon">${icon('profile')}</span><span><b>Pessoal</b><small>Só você</small></span><strong>${workspaceMode==='personal'?'✓':''}</strong></button>${groups.map(x=>`<button type="button" class="workspace-item ${workspaceMode==='group'&&g?.id===x.id?'active':''}" data-workspace-group="${esc(x.id)}"><span class="workspace-item-icon">${icon('group')}</span><span><b>${esc(x.name)}</b><small>${x.visibility==='private'?'Privada':'Pública'} · ${x.role==='owner'?'dona da sala':'participante'}</small></span><strong>${workspaceMode==='group'&&g?.id===x.id?'✓':''}</strong></button>`).join('')}<div class="workspace-menu-sep"></div><button id="workspaceCreate" type="button" class="workspace-menu-action">${icon('plus')}<span>Criar nova sala</span></button><button id="workspaceJoin" type="button" class="workspace-menu-action">${icon('right')}<span>Entrar com código</span></button></div></div>`;
+ mount.innerHTML=`<div class="workspace-switcher"><button id="workspaceTrigger" class="workspace-trigger" type="button" aria-expanded="${workspaceMenuOpen?'true':'false'}"><span class="workspace-trigger-icon">${workspaceMode==='group'?icon('group'):icon('profile')}</span><span class="workspace-trigger-copy"><b>${esc(workspaceLabel())}</b></span><span class="workspace-trigger-chevron" aria-hidden="true">${icon('chevron')}</span></button><div id="workspaceMenu" class="workspace-menu ${workspaceMenuOpen?'show':''}" role="menu"><button type="button" class="workspace-item ${workspaceMode==='personal'?'active':''}" data-workspace="personal"><span class="workspace-item-icon">${icon('profile')}</span><span><b>Pessoal</b><small>Só você</small></span><strong>${workspaceMode==='personal'?'✓':''}</strong></button>${groups.map(x=>`<button type="button" class="workspace-item ${workspaceMode==='group'&&g?.id===x.id?'active':''}" data-workspace-group="${esc(x.id)}"><span class="workspace-item-icon">${icon('group')}</span><span><b>${esc(x.name)}</b><small>${x.visibility==='private'?'Privada':'Pública'} · ${x.role==='owner'?'dona da sala':'participante'}</small></span><strong>${workspaceMode==='group'&&g?.id===x.id?'✓':''}</strong></button>`).join('')}<div class="workspace-menu-sep"></div><button id="workspaceCreate" type="button" class="workspace-menu-action">${icon('plus')}<span>Criar nova sala</span></button><button id="workspaceJoin" type="button" class="workspace-menu-action">${icon('right')}<span>Entrar com código</span></button></div></div>`;
  $('workspaceTrigger').onclick=e=>{e.stopPropagation();workspaceMenuOpen=!workspaceMenuOpen;const menu=$('workspaceMenu');menu?.classList.toggle('show',workspaceMenuOpen);$('workspaceTrigger')?.setAttribute('aria-expanded',workspaceMenuOpen?'true':'false')};
  document.querySelectorAll('[data-workspace="personal"]').forEach(b=>b.onclick=()=>switchWorkspace('personal'));
  document.querySelectorAll('[data-workspace-group]').forEach(b=>b.onclick=()=>switchWorkspace('group',b.dataset.workspaceGroup));
@@ -203,11 +207,13 @@ function renderApp(){workspaceMode=state?.workspaceMode==='group'&&state?.group?
 function renderHome(){
  const me=current(),s=monthStats(me.id),p=progress(me.id),c=challenge(),rec=state.days[me.id]?.[today()],status=rec?STATUS[rec.status]:null;
  const isGroup=workspaceMode==='group'&&state.group,group=state.group,users=state.users||[],good=s.green,range=goalRange();
+ const bannerGroup=isGroup?group:rememberedWorkspaceGroup(),showRoomBanner=Boolean(bannerGroup);
+ const bannerCount=isGroup&&bannerGroup?.id===group?.id?users.length:(Number(bannerGroup?.memberCount)||1);
  const pageHome=$('page-home');pageHome.dataset.workspace=isGroup?'group':'personal';const canRegisterToday=canEdit(today(),me.id);const todayActionLabel=today()<range.start?'Meta ainda não começou':today()>range.end?'Meta encerrada':status?'Editar hoje':'Registrar hoje';
  pageHome.innerHTML=`
- ${isGroup?`<section class="workspace-home-banner is-group" aria-label="Sala ativa">
-  <div class="workspace-home-main"><div class="workspace-home-mark">${icon('group')}</div><div class="workspace-home-copy"><div class="workspace-home-kicker">SALA ATIVA</div><h2>${esc(group.name)}</h2><span class="workspace-home-status">${icon('group')} ${users.length} ${users.length===1?'participante':'participantes'} · ${group.visibility==='private'?'Privada':'Pública'}</span></div></div>
-  <div class="workspace-home-actions"><div id="workspaceMount" class="workspace-mount"></div><button id="workspacePersonalQuick" class="workspace-home-secondary" type="button">${icon('profile')}<span>Voltar ao pessoal</span></button></div>
+ ${showRoomBanner?`<section class="workspace-home-banner is-group ${isGroup?'is-current-group':'is-remembered-group'}" aria-label="Sala ativa">
+  <div class="workspace-home-main"><div class="workspace-home-mark">${icon('group')}</div><div class="workspace-home-copy"><div class="workspace-home-kicker">SALA ATIVA</div><h2>${esc(bannerGroup.name)}</h2><div class="workspace-home-status"><span class="workspace-room-member-count">${icon('group')}<b>${bannerCount}</b> ${bannerCount===1?'participante':'participantes'}</span><span class="workspace-room-visibility ${bannerGroup.visibility==='private'?'is-private':'is-public'}"><i></i>${bannerGroup.visibility==='private'?'Privada':'Pública'}</span></div></div></div>
+  <div class="workspace-home-actions"><div id="workspaceMount" class="workspace-mount"></div>${isGroup?'<button id="workspacePersonalQuick" class="workspace-home-secondary" type="button">'+icon('profile')+'<span>Voltar ao pessoal</span></button>':'<button id="workspaceOpenRoom" data-group-id="'+esc(bannerGroup.id)+'" class="workspace-home-secondary workspace-home-open-room" type="button">'+icon('group')+'<span>Abrir sala</span></button>'}</div>
  </section>`:''}
  <div class="head"><div><div class="eyebrow">${isGroup?'Sala':'Pessoal'} · Meta ${displayDate(range.start)} – ${displayDate(range.end)}</div><h1>${isGroup?'Evoluam juntos.':'Seu espaço, seu ritmo.'}</h1><p>${isGroup?'O progresso compartilhado desta sala.':'Seus registros pessoais, em um só lugar.'}</p></div><button class="goal-edit-button" type="button" data-edit-goal>${icon('calendar')}<span>Meta</span></button></div>
  <div class="home-focus"><div class="card hero home-streak"><div class="eyebrow">${today()<range.start?'A meta ainda não começou':today()>range.end?'Meta encerrada':`Dia ${Math.max(1,c.elapsed)} de ${c.total}`}</div><h2>${esc(me.name.split(' ')[0])}, continue no ritmo.</h2><p>${status?`Hoje: ${esc(status.label)}${rec.note?' · '+esc(rec.note):''}`:'Registre como foi seu dia.'}</p><div class="progress-track"><i style="width:${c.percent}%"></i></div><div class="hero-actions"><button id="homeToday" class="primary" ${canRegisterToday?'':'disabled aria-disabled="true"'} style="height:42px;padding:0 14px">${todayActionLabel}</button><button id="homeCalendar" class="soft">Calendário</button></div></div>
@@ -217,15 +223,27 @@ function renderHome(){
  $('homeRoom').onclick=()=>{if(isGroup){roomTab='mine';setPage('group')}else{roomTab='explore';setPage('group');if(online&&!roomPublicLoaded)loadPublicRooms(roomSearchQuery)}};
  $('workspaceBrowseRooms')?.addEventListener('click',()=>{roomTab='explore';setPage('group');if(online&&!roomPublicLoaded)loadPublicRooms(roomSearchQuery)});
  $('workspacePersonalQuick')?.addEventListener('click',()=>switchWorkspace('personal'));
+ $('workspaceOpenRoom')?.addEventListener('click',()=>switchWorkspace('group',$('workspaceOpenRoom')?.dataset.groupId||bannerGroup?.id));
  $('homeAllMembers')?.addEventListener('click',()=>{roomTab='mine';setPage('group')});
 }
 
 function selectedCalendarMember(){return state.users.find(u=>u.id===(calendarMemberId||currentUser.id))||current()}
 function renderCalendar(){
- const me=selectedCalendarMember(),d=new Date(calendarDate),y=d.getFullYear(),m=d.getMonth(),first=new Date(y,m,1),daysIn=new Date(y,m+1,0).getDate(),start=first.getDay(),range=goalRange();
+ const me=workspaceMode==='group'?current():selectedCalendarMember(),d=new Date(calendarDate),y=d.getFullYear(),m=d.getMonth(),first=new Date(y,m,1),daysIn=new Date(y,m+1,0).getDate(),start=first.getDay(),range=goalRange();
+ const roomMembers=workspaceMode==='group'?(state.users||[]).filter(u=>u.id!==me.id):[];
+ const memberColumns=Math.max(1,Math.ceil(Math.sqrt(Math.max(1,roomMembers.length))));
+ const memberDotSize=Math.max(2,Math.min(5,Math.floor(32/memberColumns)));
+ const memberRows=Math.ceil(roomMembers.length/memberColumns);
+ const memberDotsHeight=roomMembers.length?memberRows*memberDotSize+Math.max(0,memberRows-1)*2:0;
  let grid=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(x=>`<div class="dow">${x}</div>`).join('');for(let i=0;i<start;i++)grid+='<div></div>';
- for(let n=1;n<=daysIn;n++){const date=iso(y,m,n),rec=state.days[me.id]?.[date],future=date>today(),before=date<range.start,after=date>range.end,locked=before||future||after;grid+=`<button class="day ${date===today()?'today ':''}${locked?'locked ':''}${future?'future ':''}" style="--day-i:${Math.min(n,31)}" ${locked?'disabled':''} onclick="window.__openDay('${date}')"><span class="num">${n}</span><span class="day-state">${rec?`<span class="dot ${rec.status}"></span><span>${esc(STATUS[rec.status].label)}</span>`:`<span class="calendar-day-empty">${before||after?'—':future?'Em breve':'Adicionar'}</span>`}</span></button>`}
- const selectors=state.users.length>1?state.users.map((u,i)=>`<button class="map-chip" style="${u.id===me.id?`border-color:${memberColor(u,i)};color:${memberColor(u,i)}`:''}" onclick="window.__selectCalendar('${u.id}')"><i class="color-dot-lg" style="width:8px;height:8px;border-radius:50%;background:${memberColor(u,i)}"></i>${esc(u.name)}${u.id===currentUser.id?' · você':''}</button>`).join(''):'';
+ for(let n=1;n<=daysIn;n++){
+   const date=iso(y,m,n),rec=state.days[me.id]?.[date],future=date>today(),before=date<range.start,after=date>range.end,locked=before||future||after;
+   const emptyLabel=before||after?'—':future?'Em breve':'Adicionar';
+   const primaryState=rec?`<span class="dot ${rec.status}"></span><span class="calendar-day-status-label">${esc(STATUS[rec.status].label)}</span>`:`<span class="dot no-record"></span><span class="calendar-day-status-label calendar-day-empty">${emptyLabel}</span>`;
+   const otherDots=roomMembers.length?`<div class="calendar-member-dots" aria-label="Registros dos outros participantes" style="--members-cols:${memberColumns};--member-dot-size:${memberDotSize}px">${roomMembers.map(u=>{const memberRec=state.days[u.id]?.[date],label=memberRec?STATUS[memberRec.status].label:'Sem registro';return `<i class="calendar-member-dot ${memberRec?memberRec.status:'no-record'}" style="--dot-size:${memberDotSize}px" title="${esc(u.name)}: ${esc(label)}" aria-label="${esc(u.name)}: ${esc(label)}"></i>`}).join('')}</div>`:'';
+   grid+=`<button class="day ${workspaceMode==='group'?'day-group ':''}${date===today()?'today ':''}${locked?'locked ':''}${future?'future ':''}" style="--day-i:${Math.min(n,31)};--members-height:${memberDotsHeight}px" ${locked?'disabled':''} onclick="window.__openDay('${date}')"><span class="num">${n}</span><span class="calendar-day-primary">${primaryState}</span>${otherDots}</button>`;
+ }
+ const selectors=workspaceMode!=='group'&&state.users.length>1?state.users.map((u,i)=>`<button class="map-chip" style="${u.id===me.id?`border-color:${memberColor(u,i)};color:${memberColor(u,i)}`:''}" onclick="window.__selectCalendar('${u.id}')"><i class="color-dot-lg" style="width:8px;height:8px;border-radius:50%;background:${memberColor(u,i)}"></i>${esc(u.name)}${u.id===currentUser.id?' · você':''}</button>`).join(''):'';
  $('page-calendar').innerHTML=`<div class="head"><div><div class="eyebrow">${workspaceMode==='group'?'Sala':'Privado'} · ${displayDate(range.start)} – ${displayDate(range.end)}</div><h1>Calendário</h1></div><button class="goal-edit-button" type="button" data-edit-goal>${icon('calendar')}<span>Meta</span></button></div><div class="card calendar-card">${selectors?`<div class="member-switch">${selectors}</div>`:''}<div class="calendar-top"><div><div class="month">${first.toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}</div><div class="calendar-note">Selecione um dia para registrar.</div></div><div class="calendar-actions"><button class="soft" onclick="window.__month(-1)" aria-label="Mês anterior">${icon('left')}</button><button class="soft" onclick="window.__today()">Hoje</button><button class="soft" onclick="window.__month(1)" aria-label="Próximo mês">${icon('right')}</button></div></div><div class="calendar-grid">${grid}</div><div class="legend"><span class="pill"><i class="dot red"></i>Não treinou</span><span class="pill"><i class="dot blue"></i>Descanso</span><span class="pill"><i class="dot orange"></i>Treino mediano</span><span class="pill"><i class="dot green"></i>Treinou bem</span></div></div>`;
 }
 
@@ -255,7 +273,10 @@ function weekStats(id){
  return{points,total,avg:registered.length?total/registered.length:0,registered:registered.length}
 }
 function drawWeekChart(container,id){
- const points=historyPoints(id);
+ const comparisonIds=workspaceMode==='group'?state.users.filter(u=>u.id!==id).map(u=>u.id):[];
+ const chartDates=[...new Set([id,...comparisonIds].flatMap(memberId=>progressHistoryDates(memberId)))].sort();
+ const primaryDays=state.days[id]||{};
+ const points=chartDates.map(date=>{const status=primaryDays[date]?.status;return status?{date,status,value:STATUS[status].value,registered:true}:{date,status:null,value:0,registered:false}});
  if(!points.length){
    container.innerHTML=`<div class="progress-empty"><strong>Ainda não há registros suficientes.</strong><span>Marque pelo menos um dia no calendário para ver seu progresso aqui.</span></div>`;
    return;
@@ -268,7 +289,7 @@ function drawWeekChart(container,id){
  const weekStartDate=iso(weekStart.getFullYear(),weekStart.getMonth(),weekStart.getDate());
  const inCurrentWeek=p=>p.date>=weekStartDate&&p.date<=todayDate;
  const statusColor={red:'var(--danger)',blue:'var(--rest)',orange:'var(--warn)',green:'var(--success)'};
- let grid='',labels='',historySegments='',weekSegments='',pointsSvg='';
+ let grid='',labels='',comparisonSegments='',historySegments='',weekSegments='',pointsSvg='';
  [0,3,6,10].forEach(v=>{const yy=y(v);grid+=`<line x1="${ml}" y1="${yy}" x2="${W-mr}" y2="${yy}" class="week-grid"/><text x="${ml-11}" y="${yy+4}" text-anchor="end" class="week-y">${v}</text>`});
  const weekIndexes=points.map((p,i)=>inCurrentWeek(p)?i:null).filter(i=>i!==null);
  if(weekIndexes.length){
@@ -279,8 +300,28 @@ function drawWeekChart(container,id){
    if(arr.length<2)return;
    const d=arr.map((p,i)=>(i?'L':'M')+x(p.i)+','+y(p.value)).join(' ');
    if(isWeek)weekSegments+=`<path d="${d}" class="week-line-week"/>`;
-   else historySegments+=`<path d="${d}" class="week-line-history"/>`;
+   else {const primary=state.users.find(u=>u.id===id)||currentUser,primaryIndex=state.users.findIndex(u=>u.id===id),primaryStroke=memberColor(primary,primaryIndex<0?0:primaryIndex);historySegments+=`<path d="${d}" class="week-line-history" style="stroke:${primaryStroke};opacity:.9;stroke-width:3.5"/>`;}
  };
+ comparisonIds.forEach(function(memberId){
+   const member=state.users.find(u=>u.id===memberId);if(!member)return;
+   const memberIndex=state.users.findIndex(u=>u.id===memberId),memberStroke=memberColor(member,memberIndex);
+   const memberDays=state.days[memberId]||{};let comparisonRun=[];
+   const flushComparison=function(){
+     if(comparisonRun.length>1){
+       const d=comparisonRun.map(function(point,i){return(i?'L':'M')+x(point.i)+','+y(point.value)}).join(' ');
+       comparisonSegments+='<path d="'+d+'" class="week-line-comparison-user" style="stroke:'+memberStroke+'"/>';
+     }
+     comparisonRun=[];
+   };
+   points.forEach(function(point,i){
+     const status=memberDays[point.date]?.status;
+     if(!status){flushComparison();return}
+     const value=STATUS[status].value;
+     comparisonRun.push({i:i,value:value});
+     pointsSvg+='<circle cx="'+x(i)+'" cy="'+y(value)+'" r="3.5" fill="'+(statusColor[status]||'var(--line2)')+'" stroke="'+memberStroke+'" stroke-width="1.2" opacity=".38" class="week-point-comparison"><title>'+esc(member.name)+' · '+point.date.split('-').reverse().join('/')+' · '+esc(STATUS[status].label)+' · '+value+'/10</title></circle>';
+   });
+   flushComparison();
+ });
  let run=[],weekRun=[];
  points.forEach((p,i)=>{
    if(!p.registered){flush(run,false);run=[];flush(weekRun,true);weekRun=[];return;}
@@ -295,14 +336,15 @@ function drawWeekChart(container,id){
    if(p.registered){
      const color=statusColor[p.status]||'var(--line2)';
      pointsSvg+=`<circle cx="${xx}" cy="${y(p.value)}" r="7.2" fill="var(--panel)" stroke="${color}" stroke-width="3" class="week-point"><title>${d} · ${esc(STATUS[p.status].label)} · ${p.value}/10</title></circle><circle cx="${xx}" cy="${y(p.value)}" r="2.6" fill="${color}" class="week-point-core" aria-hidden="true"/>`;
-   }else{
+   }else if(workspaceMode!=='group'){
      pointsSvg+=`<circle cx="${xx}" cy="${y(0)}" r="4.8" class="week-point-unregistered"><title>${d} · Sem registro</title></circle>`;
    }
    const dt=new Date(p.date+'T00:00:00'),dow=dt.toLocaleDateString('pt-BR',{weekday:'short'}).replace('.','').slice(0,3);
    labels+=`<text x="${xx}" y="${H-31}" text-anchor="middle" class="week-x ${active?'active':''}">${dow}</text><text x="${xx}" y="${H-13}" text-anchor="middle" class="week-date ${active?'active':''}">${dt.getDate()}</text>`;
  });
+ const identityLegend=workspaceMode==='group'?'<div class="week-chart-members">'+[current(),...state.users.filter(u=>u.id!==id)].map(function(u,index){const ix=state.users.findIndex(x=>x.id===u.id),cc=memberColor(u,ix<0?index:ix);return '<span class="week-chart-member"><i style="background:'+cc+'"></i><span>'+(u.id===id?'Você':esc(u.name))+'</span></span>'}).join('')+'</div>':'';
  container.style.overflowX='auto';container.style.overflowY='hidden';
- container.innerHTML=`<div class="progress-chart-meta"><span>${points.length} dia${points.length===1?'':'s'} no histórico</span><span>Verde = últimos 7 dias</span></div><svg class="week-chart-svg week-chart-full" viewBox="0 0 ${W} ${H}" style="width:${W}px;min-width:${W}px;height:auto" role="img" aria-label="Histórico diário desde o primeiro registro até o último. Os últimos sete dias aparecem em verde."><defs><filter id="weekPointGlowHistory"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>${grid}${historySegments}${weekSegments}${labels}${pointsSvg}</svg>`;
+ container.innerHTML=`<div class="progress-chart-meta"><span>${points.filter(p=>p.registered).length} registro${points.filter(p=>p.registered).length===1?'':'s'}${comparisonIds.length?' no grupo':''}</span><span>Verde = últimos 7 dias</span></div>${identityLegend}<svg class="week-chart-svg week-chart-full" viewBox="0 0 ${W} ${H}" style="width:${W}px;min-width:${W}px;height:auto" role="img" aria-label="Histórico diário desde o primeiro registro até o último. Os últimos sete dias aparecem em verde."><defs><filter id="weekPointGlowHistory"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>${grid}${comparisonSegments}${historySegments}${weekSegments}${labels}${pointsSvg}</svg>`;
 }
 function renderProgress(){
  const me=current(),others=state.users.filter(u=>u.id!==me.id),history=historyPoints(me.id),w=weekStats(me.id),c=memberColor(me,state.users.findIndex(x=>x.id===me.id)),range=goalRange();
