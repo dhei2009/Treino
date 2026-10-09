@@ -296,3 +296,46 @@ html.theme-transition *,html.theme-transition *::before,html.theme-transition *:
  #page-group .room-current-top{flex-direction:column}
  #page-group .room-invite{align-items:flex-start;flex-direction:column}
 }
+
+
+/* v11 — workspace home switcher: clearly separate private and shared spaces */
+.workspace-home-banner{position:relative;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:18px 19px;margin:0 0 22px;border:1px solid var(--line);border-radius:22px;background:var(--panel);box-shadow:0 8px 28px rgba(20,34,64,.045);overflow:visible;isolation:isolate;transition:background .35s ease,border-color .35s ease,box-shadow .35s ease}
+.workspace-home-banner:before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background:linear-gradient(110deg,color-mix(in srgb,var(--accent) 4%,transparent),transparent 58%)}
+.workspace-home-banner.is-group{border-color:color-mix(in srgb,#3478F6 34%,var(--line));background:linear-gradient(115deg,color-mix(in srgb,#2F7CF6 10%,var(--panel)),var(--panel) 72%);box-shadow:0 12px 34px rgba(40,103,210,.09)}
+.workspace-home-banner.is-group:before{background:radial-gradient(circle at 93% 10%,rgba(47,124,246,.13),transparent 39%),linear-gradient(110deg,rgba(47,124,246,.07),transparent 58%)}
+.workspace-home-main{display:flex;align-items:flex-start;gap:14px;min-width:0;flex:1}
+.workspace-home-mark{width:48px;height:48px;display:grid;place-items:center;flex:0 0 48px;border-radius:16px;background:var(--panel2);color:var(--muted);border:1px solid var(--line)}
+.workspace-home-mark .icon{width:23px;height:23px}
+.workspace-home-banner.is-group .workspace-home-mark{background:linear-gradient(140deg,#2F80FF,#1757CB);color:#fff;border-color:transparent;box-shadow:0 8px 18px rgba(37,107,225,.22)}
+.workspace-home-copy{min-width:0;display:grid;gap:5px}
+.workspace-home-kicker{font-size:9px;line-height:1.25;font-weight:950;letter-spacing:.13em;color:var(--muted)}
+.workspace-home-banner.is-group .workspace-home-kicker{color:#2F70D9}
+.workspace-home-copy h2{margin:0;font-size:clamp(19px,2vw,25px);line-height:1.13;letter-spacing:-.045em;overflow-wrap:anywhere}
+.workspace-home-copy p{margin:0;max-width:560px;font-size:11px;line-height:1.55;color:var(--muted)}
+.workspace-home-status{display:flex;align-items:center;gap:5px;margin-top:3px;color:var(--muted);font-size:9px;font-weight:800}
+.workspace-home-status .icon{width:13px;height:13px}
+.workspace-home-banner.is-group .workspace-home-status{color:#2D68C5}
+.workspace-home-actions{position:relative;display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.workspace-home-actions .workspace-mount{order:0}
+.workspace-home-actions .workspace-trigger{min-width:150px;max-width:190px;height:44px;border-radius:13px}
+.workspace-home-actions .workspace-trigger-copy small{display:block}
+.workspace-home-actions .workspace-trigger-copy b{max-width:125px}
+.workspace-home-secondary,.workspace-home-primary{height:42px;padding:0 13px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:12px;font-size:10px;font-weight:900;white-space:nowrap;transition:transform .18s ease,box-shadow .18s ease,background .18s ease}
+.workspace-home-secondary{border:1px solid var(--line);background:var(--panel);color:var(--text)}
+.workspace-home-primary{border:1px solid #2F7CF6;background:#2F7CF6;color:#fff;box-shadow:0 7px 16px rgba(47,124,246,.18)}
+.workspace-home-secondary:hover,.workspace-home-primary:hover{transform:translateY(-1px)}
+.workspace-home-secondary .icon,.workspace-home-primary .icon{width:15px;height:15px}
+#page-home[data-workspace="group"] .home-streak{background:linear-gradient(135deg,color-mix(in srgb,#2F7CF6 12%,var(--panel)),var(--panel) 75%);border-color:color-mix(in srgb,#2F7CF6 22%,var(--line))}
+#page-home[data-workspace="group"] .home-streak .progress-track i{background:linear-gradient(90deg,#2F7CF6,#65A3FF)}
+#page-home[data-workspace="group"] .home-moment-card{border-top:3px solid #3D83F6}
+.group-home-roster{margin-top:15px;border-color:color-mix(in srgb,#2F7CF6 19%,var(--line));animation:workspaceCardIn .44s .06s both}
+#page-home.workspace-enter[data-workspace="group"]{animation:workspaceEnterFromRight .5s cubic-bezier(.2,.75,.25,1) both}
+#page-home.workspace-enter[data-workspace="personal"]{animation:workspaceEnterFromLeft .5s cubic-bezier(.2,.75,.25,1) both}
+#page-home.workspace-enter .workspace-home-banner{animation:workspaceBannerFocus .62s cubic-bezier(.18,.8,.25,1) both}
+@keyframes workspaceEnterFromRight{from{opacity:.2;transform:translateX(22px) scale(.99);filter:blur(3px)}to{opacity:1;transform:translateX(0) scale(1);filter:blur(0)}}
+@keyframes workspaceEnterFromLeft{from{opacity:.2;transform:translateX(-22px) scale(.99);filter:blur(3px)}to{opacity:1;transform:translateX(0) scale(1);filter:blur(0)}}
+@keyframes workspaceBannerFocus{0%{opacity:.65;transform:translateY(7px) scale(.985)}55%{opacity:1;transform:translateY(-2px) scale(1.005)}100%{transform:none}}
+@keyframes workspaceCardIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@media(max-width:760px){.workspace-home-banner{align-items:stretch;flex-direction:column;gap:14px;padding:15px;border-radius:18px;margin-bottom:19px}.workspace-home-main{gap:11px}.workspace-home-mark{width:42px;height:42px;flex-basis:42px;border-radius:13px}.workspace-home-copy h2{font-size:20px}.workspace-home-actions{width:100%;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px}.workspace-home-actions .workspace-mount,.workspace-home-actions .workspace-switcher{min-width:0;width:100%}.workspace-home-actions .workspace-trigger{width:100%;min-width:0;max-width:none;justify-content:flex-start}.workspace-home-actions .workspace-trigger-copy{flex:1}.workspace-home-actions .workspace-trigger-copy b{max-width:calc(100vw - 180px)}.workspace-home-actions .workspace-home-primary,.workspace-home-actions .workspace-home-secondary{width:100%;min-width:0;padding:0 8px}.workspace-home-actions .workspace-menu{left:0;right:auto;width:min(330px,calc(100vw - 28px))}}
+@media(max-width:420px){.workspace-home-banner{padding:13px}.workspace-home-copy p{font-size:10px}.workspace-home-actions{grid-template-columns:1fr}.workspace-home-actions .workspace-trigger{height:42px}.workspace-home-actions .workspace-trigger-copy b{max-width:calc(100vw - 95px)}}
+@media(prefers-reduced-motion:reduce){#page-home.workspace-enter,#page-home.workspace-enter .workspace-home-banner,.group-home-roster{animation:none!important}}
