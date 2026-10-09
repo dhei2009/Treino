@@ -339,3 +339,77 @@ html.theme-transition *,html.theme-transition *::before,html.theme-transition *:
 @media(max-width:760px){.workspace-home-banner{align-items:stretch;flex-direction:column;gap:14px;padding:15px;border-radius:18px;margin-bottom:19px}.workspace-home-main{gap:11px}.workspace-home-mark{width:42px;height:42px;flex-basis:42px;border-radius:13px}.workspace-home-copy h2{font-size:20px}.workspace-home-actions{width:100%;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px}.workspace-home-actions .workspace-mount,.workspace-home-actions .workspace-switcher{min-width:0;width:100%}.workspace-home-actions .workspace-trigger{width:100%;min-width:0;max-width:none;justify-content:flex-start}.workspace-home-actions .workspace-trigger-copy{flex:1}.workspace-home-actions .workspace-trigger-copy b{max-width:calc(100vw - 180px)}.workspace-home-actions .workspace-home-primary,.workspace-home-actions .workspace-home-secondary{width:100%;min-width:0;padding:0 8px}.workspace-home-actions .workspace-menu{left:0;right:auto;width:min(330px,calc(100vw - 28px))}}
 @media(max-width:420px){.workspace-home-banner{padding:13px}.workspace-home-copy p{font-size:10px}.workspace-home-actions{grid-template-columns:1fr}.workspace-home-actions .workspace-trigger{height:42px}.workspace-home-actions .workspace-trigger-copy b{max-width:calc(100vw - 95px)}}
 @media(prefers-reduced-motion:reduce){#page-home.workspace-enter,#page-home.workspace-enter .workspace-home-banner,.group-home-roster{animation:none!important}}
+
+/* UX refinement: compact workspace picker, contained room tabs, non-blocking UI protected while switching */
+.workspace-home-banner{gap:12px;padding:12px 14px;margin-bottom:15px;border-radius:17px}
+.workspace-home-main{min-width:0;gap:10px;align-items:center}
+.workspace-home-mark{width:36px;height:36px;flex:0 0 36px;border-radius:11px}
+.workspace-home-copy{min-width:0;display:grid;gap:2px}
+.workspace-home-copy h2{font-size:16px;line-height:1.18;margin:0;overflow-wrap:anywhere}
+.workspace-home-kicker{font-size:8px;letter-spacing:.08em;line-height:1.2}
+.workspace-home-status{margin-top:1px;font-size:9px;line-height:1.25}
+.workspace-home-actions{gap:6px}
+.workspace-home-actions .workspace-trigger{height:38px;min-width:130px;border-radius:11px;padding:0 8px;gap:6px}
+.workspace-home-actions .workspace-trigger-icon{width:22px;height:22px;border-radius:7px}
+.workspace-home-actions .workspace-trigger-copy small{display:none}
+.workspace-home-actions .workspace-trigger-copy b{font-size:10px;max-width:120px}
+.workspace-home-secondary,.workspace-home-primary{height:36px;padding:0 10px;border-radius:10px;font-size:10px}
+.workspace-home-secondary .icon,.workspace-home-primary .icon{width:13px;height:13px}
+.room-tabs{position:relative;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:0 0 12px;padding:4px;border-radius:14px}
+.room-tab{min-height:38px;padding:8px 6px;font-size:11px;white-space:nowrap}
+.room-tab-panel{min-width:0;animation:roomPanelIn .2s ease both}
+@keyframes roomPanelIn{from{opacity:.5;transform:translateY(4px)}to{opacity:1;transform:none}}
+.room-current{margin-bottom:12px}
+.room-section-head h2{margin-top:3px}
+.room-section-head p{margin-top:4px}
+.room-search-loading{display:flex;align-items:center;justify-content:center;gap:9px;min-height:65px}
+.room-mini-spinner{width:16px;height:16px;border:2px solid var(--line2);border-top-color:#2F7CF6;border-radius:50%;animation:workspaceSpin .7s linear infinite}
+.workspace-loading-overlay{position:fixed;inset:0;z-index:1500;display:none;place-items:center;padding:20px;background:color-mix(in srgb,#0b1220 18%,transparent);backdrop-filter:blur(4px);touch-action:none;user-select:none;cursor:wait}
+.workspace-loading-overlay.show{display:grid;animation:saveOverlayIn .14s ease both}
+.workspace-loading-card{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;min-width:176px;max-width:calc(100vw - 36px);padding:20px 22px;border:1px solid color-mix(in srgb,var(--text) 12%,var(--line));border-radius:19px;background:color-mix(in srgb,var(--panel) 96%,transparent);color:var(--text);box-shadow:0 22px 65px rgba(0,0,0,.2);text-align:center}
+.workspace-loading-card b{font-size:12px;font-weight:900}
+.workspace-loading-card small{font-size:10px;color:var(--muted)}
+.workspace-loading-spinner{width:25px;height:25px;border:3px solid var(--line);border-top-color:#2F7CF6;border-radius:50%;animation:workspaceSpin .7s linear infinite}
+@keyframes workspaceSpin{to{transform:rotate(360deg)}}
+.section-info-button{width:29px;height:29px;flex:0 0 29px;display:grid;place-items:center;border:1px solid var(--line2);border-radius:50%;background:var(--panel);color:var(--muted);padding:0;cursor:pointer;transition:color .18s,border-color .18s,background .18s,transform .18s}
+.section-info-button:hover{color:#2F7CF6;border-color:#8AB5FF;background:color-mix(in srgb,#2F7CF6 8%,var(--panel));transform:translateY(-1px)}
+.section-info-button .icon{width:15px;height:15px}
+.head.has-info-button{align-items:flex-start}
+.section-info-back{position:fixed;inset:0;z-index:1600;display:none;place-items:center;padding:18px;background:rgba(8,14,25,.38);backdrop-filter:blur(4px)}
+.section-info-back.show{display:grid;animation:saveOverlayIn .16s ease both}
+.section-info-dialog{position:relative;width:min(390px,100%);padding:24px 22px 18px;border:1px solid var(--line);border-radius:22px;background:var(--panel);color:var(--text);box-shadow:0 25px 80px rgba(0,0,0,.24);animation:roomPanelIn .2s ease both}
+.section-info-close{position:absolute;top:11px;right:11px;width:30px;height:30px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);color:var(--muted);font-size:20px;line-height:1}
+.section-info-symbol{width:31px;height:31px;display:grid;place-items:center;margin-bottom:13px;border:1px solid color-mix(in srgb,#2F7CF6 40%,var(--line));border-radius:50%;background:color-mix(in srgb,#2F7CF6 10%,var(--panel));color:#2F7CF6;font-size:18px;font-weight:900}
+.section-info-dialog h2{margin:0 30px 8px 0;font-size:19px;letter-spacing:-.035em}
+.section-info-dialog p{margin:0;color:var(--muted);font-size:12px;line-height:1.7}
+.section-info-ok{width:100%;height:40px;margin-top:18px;border-radius:11px}
+@media(max-width:760px){
+ .workspace-home-banner{display:grid;grid-template-columns:minmax(0,1fr);align-items:center;gap:8px;padding:10px 11px;margin-bottom:13px;border-radius:15px}
+ .workspace-home-main{gap:8px;align-items:center}
+ .workspace-home-mark{width:33px;height:33px;flex-basis:33px;border-radius:10px}
+ .workspace-home-copy h2{font-size:14px;line-height:1.2}
+ .workspace-home-copy p{display:none}
+ .workspace-home-status{font-size:8px;margin-top:0}
+ .workspace-home-actions{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}
+ .workspace-home-actions .workspace-mount,.workspace-home-actions .workspace-switcher{width:100%;min-width:0}
+ .workspace-home-actions .workspace-trigger{width:100%;min-width:0;max-width:none;height:35px;min-height:35px;justify-content:flex-start}
+ .workspace-home-actions .workspace-trigger-copy{flex:1}
+ .workspace-home-actions .workspace-trigger-copy b{max-width:calc(100vw - 165px);font-size:10px}
+ .workspace-home-actions .workspace-home-primary,.workspace-home-actions .workspace-home-secondary{width:auto;min-width:0;height:35px;padding:0 10px;white-space:nowrap}
+ .workspace-home-actions .workspace-menu{left:0;right:auto;width:min(330px,calc(100vw - 28px))}
+ .room-tabs{position:static;gap:3px;padding:3px;margin-bottom:10px}
+ .room-tab{min-height:37px;font-size:10px;padding:7px 3px;letter-spacing:-.01em}
+ .room-current-top{flex-direction:row;align-items:center;gap:8px}
+ .room-current-top .soft{white-space:nowrap;padding:0 9px}
+ .head.has-info-button{flex-direction:row;align-items:flex-start;gap:8px}
+ .head.has-info-button>div{min-width:0;flex:1}
+ .head.has-info-button h1{font-size:26px}
+ .section-info-button{width:28px;height:28px;flex-basis:28px}
+}
+@media(max-width:390px){
+ .workspace-home-actions .workspace-trigger-copy b{max-width:calc(100vw - 175px)}
+ .workspace-home-secondary,.workspace-home-primary{font-size:9px;padding:0 8px}
+ .room-tab{font-size:9px}
+ .room-current-top{align-items:flex-start;flex-direction:column}
+}
+@media(prefers-reduced-motion:reduce){.room-tab-panel,.workspace-loading-overlay.show,.section-info-back.show,.section-info-dialog{animation:none!important}.room-mini-spinner,.workspace-loading-spinner{animation-duration:1.8s}}
