@@ -374,6 +374,15 @@ async function groupsForUser(userId) {
   if (groupError) throw groupError;
 
   const byId = new Map((groupRows || []).map((g) => [g.id, g]));
+  const { data: allMemberships, error: countError } = await supabase
+    .from('group_members')
+    .select('group_id')
+    .in('group_id', ids);
+  if (countError) throw countError;
+  const memberCountByGroup = new Map();
+  for (const row of allMemberships || []) {
+    memberCountByGroup.set(row.group_id, (memberCountByGroup.get(row.group_id) || 0) + 1);
+  }
   return (members || [])
     .map((m) => {
       const g = byId.get(m.group_id);
@@ -384,6 +393,7 @@ async function groupsForUser(userId) {
         inviteCode: g.invite_code,
         visibility: g.visibility === 'public' ? 'public' : 'private',
         role: m.role,
+        memberCount: memberCountByGroup.get(g.id) || 1,
         challengeStart: g.challenge_start,
         challengeEnd: g.challenge_end
       };
@@ -495,6 +505,7 @@ async function loadStateForUser(userId, workspaceMode = 'auto', requestedGroupId
 
   return {
     workspaceMode: group ? 'group' : 'personal',
+    activeGroupId: user.active_group_id || null,
     users: ordered,
     days: dayMap,
     groups,
