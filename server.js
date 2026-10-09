@@ -1228,6 +1228,20 @@ app.post('/api/workspace', requireAuth, async (req, res) => {
 
 app.get('/api/groups', requireAuth, async (req, res) => {
   try {
+    if (String(req.query.public || '') === '1') {
+      const supabase = requireSupabase();
+      const query = String(req.query.q || '').trim().replace(/[%,_]/g, ' ').slice(0, 80);
+      let request = supabase
+        .from('groups')
+        .select('id, name, visibility')
+        .eq('visibility', 'public')
+        .order('name', { ascending: true })
+        .limit(30);
+      if (query) request = request.ilike('name', `%${query}%`);
+      const { data, error } = await request;
+      if (error) throw error;
+      return res.json({ groups: (data || []).map((g) => ({ id: g.id, name: g.name, visibility: 'public' })) });
+    }
     res.json({ groups: await groupsForUser(req.userId) });
   } catch (e) {
     console.error('Groups load failed:', e);
@@ -1288,15 +1302,29 @@ app.post('/api/group', requireAuth, async (req, res) => {
 app.post('/api/group/join', requireAuth, async (req, res) => {
   try {
     const supabase = requireSupabase();
+    const groupId = String(req.body.groupId || '').trim();
     const code = String(req.body.code || '').trim().toUpperCase();
-    if (!code) return res.status(400).json({ error: 'Código do convite ausente.' });
+    if (!groupId && !code) return res.status(400).json({ error: 'Digite o código do convite ou escolha uma sala pública.' });
 
-    const { data: group, error } = await supabase.from('groups').select('*').eq('invite_code', code).maybeSingle();
+    let groupQuery = supabase.from('groups').select('*');
+    if (groupId) groupQuery = groupQuery.eq('id', groupId);
+    else groupQuery = groupQuery.eq('invite_code', code);
+    const { data: group, error } = await groupQuery.maybeSingle();
     if (error) throw error;
-    if (!group) return res.status(404).json({ error: 'Convite não encontrado.' });
+    if (!group) return res.status(404).json({ error: groupId ? 'Sala não encontrada.' : 'Convite não encontrado.' });
+    if (groupId && group.visibility !== 'public') return res.status(403).json({ error: 'Esta sala é privada. Peça o código de convite ao criador.' });
 
-    const { error: mErr } = await supabase.from('group_members').upsert({ group_id: group.id, user_id: req.userId, role: 'member' }, { onConflict: 'group_id,user_id' });
-    if (mErr) throw mErr;
+    const { data: existingMembership, error: membershipCheckError } = await supabase
+      .from('group_members')
+      .select('role')
+      .eq('group_id', group.id)
+      .eq('user_id', req.userId)
+      .maybeSingle();
+    if (membershipCheckError) throw membershipCheckError;
+    if (!existingMembership) {
+      const { error: mErr } = await supabase.from('group_members').insert({ group_id: group.id, user_id: req.userId, role: 'member' });
+      if (mErr) throw mErr;
+    }
 
     const { error: uErr } = await supabase.from('app_users').update({ active_group_id: group.id }).eq('id', req.userId);
     if (uErr) throw uErr;
