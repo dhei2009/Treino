@@ -1,4 +1,25 @@
 (()=>{'use strict';
+// Centralize the visible release notes. Bump RELEASE_VERSION whenever you publish a named release.
+const RELEASE_VERSION='9.9.4';
+const RELEASE_HISTORY=[
+ {version:'9.9.4',title:'Novo ícone e identidade visual',desc:'Símbolo ST redesenhado do zero, com halteres estilizados, acabamento premium e contraste mais claro. A cor do ícone acompanha o tema e a cor de destaque escolhida.'},
+ {version:'9.9.3',title:'Avisos de atualização',desc:'Tela de novidades com detecção automática de alterações nos arquivos do site, inclusive ajustes pequenos.'},
+ {version:'9.9.2',title:'Melhorias na interface',desc:'Ajustes visuais, navegação e experiência de uso.'},
+ {version:'9.7.0',title:'Calendário e progresso',desc:'Melhorias no calendário de treinos e na visualização do progresso dos participantes.'},
+ {version:'9.4.5',title:'Correções gerais',desc:'Correções de funcionamento e melhorias de estabilidade.'}
+];
+// Capture the original asset URLs before the theme system turns the favicon into an SVG data URL.
+const RELEASE_ASSET_URLS=(()=>{
+ const urls=[];
+ try{if(document.currentScript?.src)urls.push(new URL(document.currentScript.src,location.href).href)}catch{}
+ try{urls.push(new URL(location.pathname,location.origin).href)}catch{}
+ document.querySelectorAll('link[rel="stylesheet"],link[rel~="icon"]').forEach(link=>{
+  try{const u=new URL(link.href,location.href);if(u.origin===location.origin&&!u.href.startsWith('data:'))urls.push(u.href)}catch{}
+ });
+ return [...new Set(urls)];
+})();
+const RELEASE_SEEN_BUILD_KEY='shape_together_seen_build_v1';
+const RELEASE_SEEN_VERSION_KEY='shape_together_seen_version_v1';
 const LOCAL_KEY='shape_together_local_v6',THEME_KEY='shape_together_theme_v7',ACCENT_KEY='shape_together_accent_v7',START='2026-09-29';
 const DEFAULT_ACCENTS={light:'#11120F',dark:'#F5F3ED'};
 const COLORS=['#4C7DFF','#E6536F','#19A779','#8A63D2','#E6A23C','#1F9CAA','#D84B9B'];
@@ -51,14 +72,15 @@ function applyAccent(c,persist=true){const next=hex(c)||DEFAULT_ACCENTS[theme()]
 
 function updateFavicon(){
  const accent=hex((document.documentElement.style.getPropertyValue('--accent')||'').trim())||hex(localStorage.getItem(ACCENT_KEY))||DEFAULT_ACCENTS[theme()];
- const ink=contrast(accent),shade=mix(accent,ink,.12);
- const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${accent}"/><stop offset="1" stop-color="${shade}"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="17" fill="url(#bg)"/><rect x="3.25" y="3.25" width="57.5" height="57.5" rx="15.75" fill="none" stroke="${ink}" stroke-opacity=".18" stroke-width="1.5"/><g fill="none" stroke="${ink}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16h22"/><path d="M21 12v8M16 13v6M43 12v8M48 13v6"/></g><text x="32" y="48" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="900" letter-spacing="-1.5" fill="${ink}">ST</text></svg>`;
+ // Keep the mark visible even when the chosen accent is very dark.
+ const mark=luminance(accent)<.24?mix(accent,'#FFFFFF',.68):accent;
+ const shade=mix(mark,'#11120F',.18);
+ const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#20221F"/><stop offset="1" stop-color="#090A09"/></linearGradient><linearGradient id="metal" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#B8BDB8"/></linearGradient><linearGradient id="weight" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${mark}"/><stop offset="1" stop-color="${shade}"/></linearGradient><filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.5"/></filter></defs><rect x="2" y="2" width="60" height="60" rx="17" fill="url(#bg)"/><rect x="2.7" y="2.7" width="58.6" height="58.6" rx="16.3" fill="none" stroke="${mark}" stroke-opacity=".52" stroke-width="1.4"/><g fill="url(#weight)" filter="url(#glow)" opacity=".34"><rect x="8" y="22" width="8" height="20" rx="2.5"/><rect x="17" y="18" width="6" height="28" rx="2"/><rect x="41" y="18" width="6" height="28" rx="2"/><rect x="48" y="22" width="8" height="20" rx="2.5"/></g><g fill="url(#weight)"><rect x="8" y="23" width="7" height="18" rx="2"/><rect x="16.5" y="19" width="5.5" height="26" rx="1.8"/><rect x="42" y="19" width="5.5" height="26" rx="1.8"/><rect x="49" y="23" width="7" height="18" rx="2"/><rect x="20.5" y="29.5" width="23" height="5" rx="2.5"/></g><path d="M31.4 19H27c-4.4 0-6.6 2.1-6.6 5.3 0 3.1 2.3 4.4 6.3 5l3.1.5c1.6.2 2.3.8 2.3 1.7 0 1.1-1 1.7-2.8 1.7h-8.4v5.2h9.3c4.7 0 7.1-2.2 7.1-5.6 0-3-2.1-4.7-6.2-5.3l-3.3-.5c-1.6-.2-2.2-.7-2.2-1.5 0-.8.7-1.3 2.1-1.3h3.7Z" fill="url(#metal)"/><path d="M34 19h15.5v5.3h-5.1v14.1h-6V24.3H34Z" fill="url(#metal)"/><path d="M31.4 19H27c-4.4 0-6.6 2.1-6.6 5.3 0 3.1 2.3 4.4 6.3 5l3.1.5c1.6.2 2.3.8 2.3 1.7 0 1.1-1 1.7-2.8 1.7h-8.4v5.2h9.3c4.7 0 7.1-2.2 7.1-5.6 0-3-2.1-4.7-6.2-5.3l-3.3-.5c-1.6-.2-2.2-.7-2.2-1.5 0-.8.7-1.3 2.1-1.3h3.7Z" fill="none" stroke="#FFFFFF" stroke-opacity=".18" stroke-width=".6"/><path d="M34 19h15.5v5.3h-5.1v14.1h-6V24.3H34Z" fill="none" stroke="#FFFFFF" stroke-opacity=".18" stroke-width=".6"/></svg>`;
  const href='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
  let link=document.querySelector('link[rel~="icon"][type="image/svg+xml"]')||document.querySelector('link[rel~="icon"]');
  if(!link){link=document.createElement('link');link.rel='icon';link.type='image/svg+xml';document.head.appendChild(link)}
  link.type='image/svg+xml';link.href=href;
 }
-
 function updateAppearance(){const dark=theme()==='dark',ic=dark?icon('moon'):icon('sun');['authTheme','topTheme'].forEach(id=>{if($(id))$(id).innerHTML=ic});if($('sideTheme'))$('sideTheme').innerHTML=ic+'<span>Aparência</span>';if($('appearanceDark')){$('appearanceDark').innerHTML=icon('moon');$('appearanceLight').innerHTML=icon('sun');$('appearancePlus').innerHTML=icon('plus');$('appearanceDark').classList.toggle('active',dark);$('appearanceLight').classList.toggle('active',!dark)}document.querySelector('meta[name="theme-color"]').setAttribute('content',document.documentElement.style.getPropertyValue('--bg'));updateFavicon()}
 function renderAppearanceColors(){
  const cur=hex(document.documentElement.style.getPropertyValue('--accent'))||localStorage.getItem(ACCENT_KEY)||DEFAULT_ACCENTS[theme()],def=DEFAULT_ACCENTS[theme()];
@@ -377,6 +399,84 @@ $('topAccount').onclick=()=>openSettings('home');$('workspaceDialogClose').oncli
 $('saveProfile').onclick=saveProfile;$('settingsDark').onclick=()=>applyTheme('dark',true);$('settingsLight').onclick=()=>applyTheme('light',true);$('settingsThemeAppearance').onclick=()=>{closeSettings();toggleAppearance($('topTheme'))};$('settingsLogout').onclick=()=>{closeSettings();logout()};$('settingsDeleteAccount').onclick=deleteAccount;$('sideLogout').onclick=logout;$('cancelDay').onclick=closeDay;$('deleteDay').onclick=deleteDay;$('saveDay').onclick=saveDay;$('dayBack').onclick=e=>{if(e.target===$('dayBack'))closeDay()};document.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('cropBack').classList.contains('show'))closeCropper();else if($('themePickerBack').classList.contains('show'))closeColorPicker();else if($('settingsBack').classList.contains('show'))closeSettings();else if($('appearance').classList.contains('show'))closeAppearance()}});
 
 window.__openDay=openDay;window.__selectCalendar=id=>{calendarMemberId=id;renderCalendar()};window.__month=dir=>{calendarDate=new Date(calendarDate.getFullYear(),calendarDate.getMonth()+dir,1);renderCalendar()};window.__today=()=>{calendarDate=new Date();renderCalendar()};
+function releaseHash(text){let h=2166136261;for(let i=0;i<text.length;i++){h^=text.charCodeAt(i);h=Math.imul(h,16777619)}return 'st-'+(h>>>0).toString(16).padStart(8,'0')}
+async function getReleaseBuildFingerprint(){
+ if(!RELEASE_ASSET_URLS.length)return null;
+ try{
+  const parts=await Promise.all(RELEASE_ASSET_URLS.map(async url=>{
+   const response=await fetch(url,{cache:'no-store',credentials:'same-origin'});
+   if(!response.ok)throw new Error('Asset version check failed');
+   return url+'\n'+await response.text();
+  }));
+  return releaseHash(parts.join('\n---asset---\n'));
+ }catch{return null}
+}
+function addReleaseNoticeStyles(){
+ if($('stReleaseNoticeStyles'))return;
+ const style=document.createElement('style');style.id='stReleaseNoticeStyles';
+ style.textContent=`
+  .st-release-backdrop{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(7,8,7,.72);backdrop-filter:blur(13px);-webkit-backdrop-filter:blur(13px);animation:stReleaseFade .22s ease both}
+  .st-release-dialog{position:relative;display:flex;flex-direction:column;width:min(100%,570px);max-height:min(88dvh,820px);overflow:hidden;border:1px solid var(--line, #dfdcd4);border-radius:30px;background:var(--panel, #fffdf9);color:var(--text, #171815);box-shadow:0 28px 100px rgba(0,0,0,.34);animation:stReleaseRise .3s cubic-bezier(.2,.8,.2,1) both}
+  .st-release-top{position:relative;padding:28px 30px 18px;background:radial-gradient(ellipse at 100% 0%,var(--accentGlowStrong,rgba(17,18,15,.12)),transparent 54%),var(--panel, #fffdf9)}
+  .st-release-brand{display:flex;align-items:center;gap:10px;margin-bottom:23px}
+  .st-release-mark{display:grid;place-items:center;width:48px;height:48px;flex:none;border:1px solid var(--accentLine,var(--line2,#cbc7bd));border-radius:16px;background:linear-gradient(145deg,#252823,#10120f);color:var(--accent,#f5a623);box-shadow:0 8px 24px var(--accentGlow,rgba(17,18,15,.16)),inset 0 1px 0 rgba(255,255,255,.09);overflow:hidden}
+  .st-release-mark svg{width:42px;height:42px;display:block}
+  .st-release-brand-label{font-size:10px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:var(--muted, #77766f)}
+  .st-release-kicker{display:block;margin-bottom:8px;font-size:10px;font-weight:900;letter-spacing:.13em;text-transform:uppercase;color:var(--muted, #77766f)}
+  .st-release-title{margin:0;font-size:clamp(25px,5vw,34px);line-height:1.1;letter-spacing:-.055em;font-weight:900;color:var(--text, #171815)}
+  .st-release-subtitle{margin:10px 0 0;font-size:14px;line-height:1.55;color:var(--muted, #77766f)}
+  .st-release-version{display:inline-flex;align-items:center;gap:7px;margin-top:17px;padding:7px 10px;border:1px solid var(--accentLine,var(--line2,#cbc7bd));border-radius:999px;background:var(--accentSoft,var(--panel2,#f0eee8));color:var(--text,var(--accentInk,#171815));font-size:11px;font-weight:850;letter-spacing:.02em}
+  .st-release-version-dot{width:6px;height:6px;border-radius:50%;background:var(--accent,#11120f);box-shadow:0 0 0 3px var(--accentGlow,rgba(17,18,15,.12))}
+  .st-release-content{overflow:auto;padding:0 30px 20px;overscroll-behavior:contain}
+  .st-release-list{display:grid;gap:9px;margin:0;padding:0;list-style:none}
+  .st-release-item{display:grid;grid-template-columns:8px minmax(0,1fr);gap:12px;padding:14px 15px;border:1px solid var(--line,#dfdcd4);border-radius:17px;background:var(--panel2,#f0eee8)}
+  .st-release-item:first-child{border-color:var(--accentLine,var(--line2,#cbc7bd));background:var(--accentSoft,var(--panel2,#f0eee8))}
+  .st-release-item-dot{width:7px;height:7px;margin-top:5px;border-radius:3px;background:var(--accent,#11120f)}
+  .st-release-item-version{display:block;margin-bottom:4px;color:var(--muted,#77766f);font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase}
+  .st-release-item-title{display:block;color:var(--text,#171815);font-size:13px;font-weight:850;line-height:1.4}
+  .st-release-item-desc{margin:4px 0 0;color:var(--muted,#77766f);font-size:12px;line-height:1.55}
+  .st-release-footer{padding:16px 30px 25px;border-top:1px solid var(--line,#dfdcd4);background:var(--panel,#fffdf9)}
+  .st-release-allgood{display:flex;align-items:flex-start;gap:10px;margin-bottom:16px}
+  .st-release-check{display:grid;place-items:center;width:28px;height:28px;flex:none;border:1px solid rgba(47,155,98,.25);border-radius:10px;background:rgba(47,155,98,.11);color:var(--success,#2f9b62);font-weight:950}
+  .st-release-allgood strong{display:block;margin:1px 0 3px;font-size:12px;font-weight:900;color:var(--text,#171815)}
+  .st-release-allgood p{margin:0;color:var(--muted,#77766f);font-size:11px;line-height:1.45}
+  .st-release-continue{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:50px;padding:13px 18px;border:0;border-radius:15px;background:var(--accent,#11120f);color:var(--accentInk,#fff);font:inherit;font-size:13px;font-weight:900;cursor:pointer;box-shadow:0 8px 20px var(--accentGlow,rgba(17,18,15,.12));transition:transform .16s ease,filter .16s ease}
+  .st-release-continue:hover{filter:brightness(1.08);transform:translateY(-1px)}.st-release-continue:active{transform:translateY(0)}.st-release-continue:focus-visible{outline:3px solid var(--accentLine,#777);outline-offset:3px}
+  .st-release-continue svg{width:17px;height:17px}
+  @keyframes stReleaseFade{from{opacity:0}to{opacity:1}}@keyframes stReleaseRise{from{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+  @media(max-width:560px){.st-release-backdrop{align-items:flex-end;padding:0}.st-release-dialog{width:100%;max-height:min(92dvh,900px);border-radius:26px 26px 0 0;border-bottom:0;padding-bottom:env(safe-area-inset-bottom);animation:stReleaseRise .26s ease both}.st-release-top{padding:23px 20px 15px}.st-release-brand{margin-bottom:18px}.st-release-mark{width:38px;height:38px;border-radius:13px}.st-release-content{padding:0 20px 16px}.st-release-footer{padding:14px 20px 19px}.st-release-item{padding:12px 13px}.st-release-title{font-size:28px}}
+  @media(prefers-reduced-motion:reduce){.st-release-backdrop,.st-release-dialog{animation:none}.st-release-continue{transition:none}}
+ `;
+ document.head.appendChild(style);
+}
+async function initReleaseNotice(){
+ let previousBuild='',previousVersion='';
+ try{previousBuild=localStorage.getItem(RELEASE_SEEN_BUILD_KEY)||'';previousVersion=localStorage.getItem(RELEASE_SEEN_VERSION_KEY)||''}catch{}
+ const fingerprint=await getReleaseBuildFingerprint();
+ const versionChanged=previousVersion!==RELEASE_VERSION;
+ const buildChanged=Boolean(fingerprint&&fingerprint!==previousBuild);
+ if(!versionChanged&&!buildChanged&&(previousBuild||previousVersion))return;
+ const automaticChange=Boolean(previousBuild&&fingerprint&&previousBuild!==fingerprint&&!versionChanged);
+ addReleaseNoticeStyles();
+ const dynamicEntry=automaticChange? [{version:'Atualização detectada',title:'Melhorias desde sua última visita',desc:'O Shape Together recebeu mudanças nos arquivos do site. Confira as novidades e continue de onde parou.'}]:[];
+ const entries=[...dynamicEntry,...RELEASE_HISTORY];
+ const versionLabel=automaticChange?`Atualização detectada · build ${fingerprint.slice(-6).toUpperCase()}`:`Versão ${RELEASE_VERSION}`;
+ const backdrop=document.createElement('div');backdrop.className='st-release-backdrop';backdrop.id='stReleaseNotice';
+ backdrop.innerHTML=`<section class="st-release-dialog" role="dialog" aria-modal="true" aria-labelledby="stReleaseTitle" aria-describedby="stReleaseSubtitle"><div class="st-release-top"><div class="st-release-brand"><span class="st-release-mark" aria-hidden="true"><svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="stReleaseMetal" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#B8BDB8"/></linearGradient></defs><g fill="currentColor"><rect x="5" y="23" width="8" height="18" rx="2.2"/><rect x="14" y="19" width="6" height="26" rx="1.8"/><rect x="44" y="19" width="6" height="26" rx="1.8"/><rect x="51" y="23" width="8" height="18" rx="2.2"/><rect x="18" y="29.5" width="28" height="5" rx="2.5"/></g><path d="M33 18H27c-4.5 0-7 2.3-7 5.8 0 3.2 2.5 4.7 6.5 5.2l3 .4c1.7.3 2.4.9 2.4 1.8 0 1.1-1 1.7-2.8 1.7H20v5.2h9.4c4.8 0 7.3-2.2 7.3-5.7 0-3.1-2.2-4.7-6.4-5.3l-3.2-.5c-1.7-.2-2.3-.7-2.3-1.5 0-.9.8-1.4 2.2-1.4H33Z" fill="url(#stReleaseMetal)"/><path d="M35 18h15v5.3h-4.8v14.8h-6.1V23.3H35Z" fill="url(#stReleaseMetal)"/></svg></span><span class="st-release-brand-label">Shape Together</span></div><span class="st-release-kicker">Uma nova etapa por aqui</span><h2 class="st-release-title" id="stReleaseTitle">Shape Together foi atualizado!</h2><p class="st-release-subtitle" id="stReleaseSubtitle">Novidades desde sua última visita</p><span class="st-release-version"><i class="st-release-version-dot" aria-hidden="true"></i>${esc(versionLabel)}</span></div><div class="st-release-content"><ul class="st-release-list">${entries.map(item=>`<li class="st-release-item"><span class="st-release-item-dot" aria-hidden="true"></span><div><span class="st-release-item-version">${esc(item.version)}</span><strong class="st-release-item-title">${esc(item.title)}</strong><p class="st-release-item-desc">${esc(item.desc)}</p></div></li>`).join('')}</ul></div><footer class="st-release-footer"><div class="st-release-allgood"><span class="st-release-check" aria-hidden="true">✓</span><div><strong>Tudo em dia!</strong><p>Veja as novidades e continue sua jornada.</p></div></div><button class="st-release-continue" id="stReleaseContinue" type="button">Entendi, continuar <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></footer></section>`;
+ document.body.appendChild(backdrop);
+ document.body.classList.add('modal-open');
+ const continueButton=$('stReleaseContinue');
+ const removeReleaseLock=e=>{if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();return}if(e.key==='Tab'){e.preventDefault();continueButton?.focus()}};
+ document.addEventListener('keydown',removeReleaseLock,true);
+ continueButton?.focus({preventScroll:true});
+ continueButton.onclick=()=>{
+  try{localStorage.setItem(RELEASE_SEEN_VERSION_KEY,RELEASE_VERSION);if(fingerprint)localStorage.setItem(RELEASE_SEEN_BUILD_KEY,fingerprint)}catch{}
+  document.removeEventListener('keydown',removeReleaseLock,true);
+  backdrop.remove();
+  document.body.classList.remove('modal-open');
+ };
+}
 $('retryBoot').onclick=boot;
+initReleaseNotice();
 boot();
 })();
