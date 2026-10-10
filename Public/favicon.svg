@@ -1,15 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Shape Together">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#11120F"/>
-      <stop offset="1" stop-color="#292B25"/>
-    </linearGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#252823"/><stop offset="1" stop-color="#090A09"/></linearGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#B8BDB8"/></linearGradient>
+    <linearGradient id="weight" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#FFD47A"/><stop offset=".48" stop-color="#FF951D"/><stop offset="1" stop-color="#D94A0D"/></linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.5"/></filter>
   </defs>
   <rect x="2" y="2" width="60" height="60" rx="17" fill="url(#bg)"/>
-  <rect x="3.25" y="3.25" width="57.5" height="57.5" rx="15.75" fill="none" stroke="#FFFFFF" stroke-opacity=".22" stroke-width="1.5"/>
-  <g fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M21 16h22"/>
-    <path d="M21 12v8M16 13v6M43 12v8M48 13v6"/>
-  </g>
-  <text x="32" y="48" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="900" letter-spacing="-1.5" fill="#FFFFFF">ST</text>
+  <rect x="2.7" y="2.7" width="58.6" height="58.6" rx="16.3" fill="none" stroke="#FF9E2C" stroke-opacity=".72" stroke-width="1.4"/>
+  <g fill="url(#weight)" filter="url(#glow)" opacity=".42"><rect x="8" y="22" width="8" height="20" rx="2.5"/><rect x="17" y="18" width="6" height="28" rx="2"/><rect x="41" y="18" width="6" height="28" rx="2"/><rect x="48" y="22" width="8" height="20" rx="2.5"/></g>
+  <g fill="url(#weight)"><rect x="8" y="23" width="7" height="18" rx="2"/><rect x="16.5" y="19" width="5.5" height="26" rx="1.8"/><rect x="42" y="19" width="5.5" height="26" rx="1.8"/><rect x="49" y="23" width="7" height="18" rx="2"/><rect x="20.5" y="29.5" width="23" height="5" rx="2.5"/></g>
+  <path d="M31.4 19H27c-4.4 0-6.6 2.1-6.6 5.3 0 3.1 2.3 4.4 6.3 5l3.1.5c1.6.2 2.3.8 2.3 1.7 0 1.1-1 1.7-2.8 1.7h-8.4v5.2h9.3c4.7 0 7.1-2.2 7.1-5.6 0-3-2.1-4.7-6.2-5.3l-3.3-.5c-1.6-.2-2.2-.7-2.2-1.5 0-.8.7-1.3 2.1-1.3h3.7Z" fill="url(#metal)"/>
+  <path d="M34 19h15.5v5.3h-5.1v14.1h-6V24.3H34Z" fill="url(#metal)"/>
+  <path d="M31.4 19H27c-4.4 0-6.6 2.1-6.6 5.3 0 3.1 2.3 4.4 6.3 5l3.1.5c1.6.2 2.3.8 2.3 1.7 0 1.1-1 1.7-2.8 1.7h-8.4v5.2h9.3c4.7 0 7.1-2.2 7.1-5.6 0-3-2.1-4.7-6.2-5.3l-3.3-.5c-1.6-.2-2.2-.7-2.2-1.5 0-.8.7-1.3 2.1-1.3h3.7Z" fill="none" stroke="#FFFFFF" stroke-opacity=".18" stroke-width=".6"/>
+  <path d="M34 19h15.5v5.3h-5.1v14.1h-6V24.3H34Z" fill="none" stroke="#FFFFFF" stroke-opacity=".18" stroke-width=".6"/>
 </svg>
