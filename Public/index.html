@@ -44,7 +44,54 @@
 </div>
 <div id="dayBack" class="sheet-back" aria-hidden="true"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-title"><div id="sheetAvatar" class="avatar"></div><div><h3 id="sheetTitle">Registrar dia</h3><small id="sheetSub"></small></div></div><div id="statusOptions" class="sheet-status"></div><textarea id="dayNote" placeholder="Anotação do dia (opcional)"></textarea><div class="sheet-actions"><button id="deleteDay" class="danger" type="button">Apagar</button><button id="cancelDay" class="soft" type="button">Cancelar</button><button id="saveDay" class="primary" type="button" style="height:40px;padding:0 14px">Salvar</button></div></div></div>
 
-<script src="/js/app.js"></script>
+<script>
+/* Proteção independente para a tela inicial: cobre erro de carregamento/execução
+   do app.js e também inicializações que não terminam. O app.js substitui o
+   comportamento de recarga por boot() assim que consegue inicializar. */
+(() => {
+  const bootView = document.getElementById('bootView');
+  const appView = document.getElementById('appView');
+  const message = document.getElementById('bootMessage');
+  const spinner = document.getElementById('bootSpinner');
+  const retry = document.getElementById('retryBoot');
+  if (!bootView || !appView || !message || !spinner || !retry) return;
+
+  const isWaiting = () =>
+    !bootView.classList.contains('hidden') &&
+    appView.classList.contains('hidden') &&
+    retry.classList.contains('hidden');
+
+  const revealFallback = (text) => {
+    if (!isWaiting()) return;
+    message.textContent = text;
+    spinner.classList.add('hidden');
+    retry.classList.remove('hidden');
+  };
+
+  // Sempre existe uma ação de recuperação, mesmo se app.js nem chegar a executar.
+  retry.onclick = () => window.location.reload();
+
+  window.addEventListener('error', (event) => {
+    if (!isWaiting()) return;
+    const target = event.target;
+    if (target && target !== window) {
+      if (target.tagName !== 'SCRIPT' || !String(target.src || '').includes('/js/app.js')) return;
+    } else if (event.filename && !String(event.filename).includes('/js/app.js')) {
+      return;
+    }
+    revealFallback('O aplicativo encontrou um erro ao iniciar. Recarregue a página para tentar novamente.');
+  }, true);
+
+  window.addEventListener('unhandledrejection', () => {
+    revealFallback('Não foi possível concluir a inicialização. Recarregue a página para tentar novamente.');
+  });
+
+  window.setTimeout(() => {
+    revealFallback('O carregamento demorou mais do que o esperado. Recarregue a página para tentar novamente.');
+  }, 22000);
+})();
+</script>
+<script src="/js/app.js?v=20261009-bootfix-1"></script>
 </body>
 </html>
 
