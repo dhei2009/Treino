@@ -1,11 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180">
-  <rect x="4" y="4" width="172" height="172" rx="42" fill="#11120F"/>
-  <g fill="#FFFFFF" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="28" y="46" width="23" height="52" rx="7"/>
-    <rect x="50" y="55" width="13" height="34" rx="5"/>
-    <path d="M59 72H121" fill="none" stroke-width="10"/>
-    <rect x="117" y="55" width="13" height="34" rx="5"/>
-    <rect x="129" y="46" width="23" height="52" rx="7"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#11120F"/>
+      <stop offset="1" stop-color="#292B25"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="17" fill="url(#bg)"/>
+  <rect x="3.25" y="3.25" width="57.5" height="57.5" rx="15.75" fill="none" stroke="#FFFFFF" stroke-opacity=".22" stroke-width="1.5"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 16h22"/>
+    <path d="M21 12v8M16 13v6M43 12v8M48 13v6"/>
   </g>
-  <text x="90" y="147" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="62" font-weight="900" letter-spacing="-4" fill="#FFFFFF">ST</text>
+  <text x="32" y="48" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="900" letter-spacing="-1.5" fill="#FFFFFF">ST</text>
 </svg>
