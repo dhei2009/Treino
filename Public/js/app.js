@@ -481,6 +481,31 @@ async function initReleaseNotice(){
   document.body.classList.remove('modal-open');
  };
 }
+function installAccountActionSpacingFix(){
+ if(document.getElementById('st-account-action-spacing-fix'))return;
+ const style=document.createElement('style');
+ style.id='st-account-action-spacing-fix';
+ style.textContent=`
+  /* Keep account actions in normal flow so they never overlap. */
+  #settingsLogout,#settingsDeleteAccount{
+   position:relative!important;inset:auto!important;float:none!important;clear:both!important;
+   display:flex!important;box-sizing:border-box!important;width:100%!important;max-width:100%!important;
+   min-height:44px!important;height:auto!important;margin:12px 0 0!important;
+   transform:none;flex:0 0 auto;white-space:normal;line-height:1.35;
+  }
+  #settingsLogout + #settingsDeleteAccount{margin-top:12px!important}
+  #settingsDeleteAccount{border-color:color-mix(in srgb,var(--danger) 38%,var(--line));}
+  .account-delete-warning{display:block!important;position:relative!important;clear:both!important;
+   margin:10px 0 4px!important;line-height:1.55!important;overflow-wrap:anywhere;}
+  .settings-content-detail{min-width:0;box-sizing:border-box;}
+  @media(max-width:520px){
+   #settingsLogout,#settingsDeleteAccount{min-height:46px!important;padding:12px 14px!important;}
+   .account-delete-warning{font-size:10px;}
+  }
+ `;
+ document.head.appendChild(style);
+}
 $('retryBoot').onclick=boot;
+installAccountActionSpacingFix();
 boot();
 })();
