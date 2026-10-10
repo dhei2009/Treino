@@ -86,7 +86,23 @@ function normalizeLocal(v){const o=v&&typeof v==='object'?v:{};o.users=Array.isA
 function readLocal(){try{const old=localStorage.getItem(LOCAL_KEY)||localStorage.getItem('shape_together_local_v5');const data=normalizeLocal(old?JSON.parse(old):null);localStorage.setItem(LOCAL_KEY,JSON.stringify(data));return data}catch{return normalizeLocal(null)}}
 function writeLocal(){state=normalizeLocal(state);localStorage.setItem(LOCAL_KEY,JSON.stringify(state))}
 const API_TIMEOUT_MS=15000;
-async function api(path,opts={}){const requestPath=path.startsWith('/api/')?path:path.replace(/^\/shape-together-api(?=\/)/,'/api');const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),API_TIMEOUT_MS);let r;try{const requestOpts={...opts,credentials:'include',signal:controller.signal,headers:{'Content-Type':'application/json',...(opts.headers||{})}};r=await fetch(requestPath,requestOpts)}catch(e){if(e?.name==='AbortError')throw Object.assign(new Error('O servidor demorou para responder. Verifique a conexão e tente novamente.'),{code:'TIMEOUT'});throw Object.assign(new Error('Não foi possível conectar ao servidor. Verifique a conexão e tente novamente.'),{code:'NETWORK'})}finally{clearTimeout(timer)}let data={};try{data=await r.json()}catch{}if(!r.ok){throw Object.assign(new Error(data.error||'O servidor não conseguiu concluir a solicitação.'),{status:r.status,code:data?.code||''})}return data}
+async function api(path,opts={}){
+ const requestPath=path.startsWith('/api/')?path:path.replace(/^\/shape-together-api(?=\/)/,'/api');
+ const controller=new AbortController();
+ const timer=setTimeout(()=>controller.abort(),API_TIMEOUT_MS);
+ try{
+  const requestOpts={...opts,credentials:'include',signal:controller.signal,headers:{'Content-Type':'application/json',...(opts.headers||{})}};
+  const r=await fetch(requestPath,requestOpts);
+  let data={};
+  try{data=await r.json()}catch(error){if(controller.signal.aborted||error?.name==='AbortError')throw error}
+  if(!r.ok)throw Object.assign(new Error(data.error||'O servidor não conseguiu concluir a solicitação.'),{status:r.status,code:data?.code||''});
+  return data;
+ }catch(e){
+  if(e?.name==='AbortError'||controller.signal.aborted)throw Object.assign(new Error('O servidor demorou para responder. Verifique a conexão e tente novamente.'),{code:'TIMEOUT'});
+  if(Number.isFinite(Number(e?.status)))throw e;
+  throw Object.assign(new Error('Não foi possível conectar ao servidor. Verifique a conexão e tente novamente.'),{code:'NETWORK',cause:e});
+ }finally{clearTimeout(timer)}
+}
 function workspaceGroups(){return Array.isArray(state?.groups)?state.groups:[]}
 function activeWorkspaceGroup(){return state?.group||null}
 function workspaceLabel(){const g=activeWorkspaceGroup();return workspaceMode==='group'&&g?g.name:'Pessoal'}
