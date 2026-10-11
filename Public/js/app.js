@@ -288,55 +288,34 @@ function weekStats(id){
  const points=weekPoints(id),registered=points.filter(p=>p.registered),total=registered.reduce((sum,p)=>sum+p.value,0);
  return{points,total,avg:registered.length?total/registered.length:0,registered:registered.length}
 }
-function drawWeekChart(container,id){
- const points=historyPoints(id);
- if(!points.length){
-   container.innerHTML=`<div class="progress-empty"><strong>Ainda não há registros suficientes.</strong><span>Marque pelo menos um dia no calendário para ver seu progresso aqui.</span></div>`;
-   return;
- }
- const n=points.length,W=Math.max(920,78+(n-1)*54),H=356,ml=50,mr=26,mt=38,mb=76,plotW=W-ml-mr,plotH=H-mt-mb;
- const x=i=>n===1?ml+plotW/2:ml+(plotW*i/(n-1));
- const y=v=>mt+plotH-(Math.max(0,Math.min(10,v))/10)*plotH;
- const todayDate=today();
- const weekStart=new Date(todayDate+'T00:00:00');weekStart.setDate(weekStart.getDate()-6);
- const weekStartDate=iso(weekStart.getFullYear(),weekStart.getMonth(),weekStart.getDate());
- const inCurrentWeek=p=>p.date>=weekStartDate&&p.date<=todayDate;
+function drawWeekChart(container,id,otherIds){
+ if(!container)return;
+ const selectedIds=[...new Set([id,...(Array.isArray(otherIds)?otherIds:(typeof compareIds!=='undefined'?[...compareIds]:[]))].filter(Boolean))];
+ const users=selectedIds.map(uid=>state.users.find(u=>u.id===uid)).filter(Boolean);
+ if(!users.length){container.innerHTML='<div class="progress-empty"><strong>Ainda não há participantes para comparar.</strong><span>Registre seus dias no calendário para acompanhar a evolução.</span></div>';return;}
+ const allDates=challengeDates(),hasAny=allDates.some(date=>users.some(u=>state.days[u.id]?.[date]?.status));
+ if(!hasAny){container.innerHTML='<div class="progress-empty"><strong>Ainda não há registros suficientes.</strong><span>Marque um ou mais dias no calendário para ver a evolução e comparar participantes.</span></div>';return;}
+ const activeDates=allDates.filter(date=>users.some(u=>state.days[u.id]?.[date]?.status));
+ const dates=allDates.slice(allDates.indexOf(activeDates[0]),allDates.indexOf(activeDates[activeDates.length-1])+1);
+ const n=dates.length,W=Math.max(920,78+(n-1)*54),H=356,ml=50,mr=28,mt=38,mb=76,plotW=W-ml-mr,plotH=H-mt-mb;
+ const x=i=>n===1?ml+plotW/2:ml+plotW*i/(n-1),y=v=>mt+plotH-(Math.max(0,Math.min(10,v))/10)*plotH;
+ const todayDate=today(),weekStart=new Date(todayDate+'T00:00:00');weekStart.setDate(weekStart.getDate()-6);
+ const weekStartDate=iso(weekStart.getFullYear(),weekStart.getMonth(),weekStart.getDate()),inWeek=date=>date>=weekStartDate&&date<=todayDate;
  const statusColor={red:'var(--danger)',blue:'var(--rest)',orange:'var(--warn)',green:'var(--success)'};
- let grid='',labels='',historySegments='',weekSegments='',pointsSvg='';
+ const series=users.map(u=>({user:u,primary:u.id===id,color:u.id===id?'var(--accent)':memberColor(u,state.users.findIndex(v=>v.id===u.id)),points:dates.map((date,index)=>{const status=state.days[u.id]?.[date]?.status||null;return{date,index,status,registered:Boolean(status),value:status?STATUS[status].value:null}})}));
+ let grid='',labels='',primaryHistory='',primaryWeek='',comparisonLines='',pointsSvg='';
  [0,3,6,10].forEach(v=>{const yy=y(v);grid+=`<line x1="${ml}" y1="${yy}" x2="${W-mr}" y2="${yy}" class="week-grid"/><text x="${ml-11}" y="${yy+4}" text-anchor="end" class="week-y">${v}</text>`});
- const weekIndexes=points.map((p,i)=>inCurrentWeek(p)?i:null).filter(i=>i!==null);
- if(weekIndexes.length){
-   const first=weekIndexes[0],last=weekIndexes[weekIndexes.length-1],step=n===1?0:plotW/(n-1),bandX=n===1?ml-22:Math.max(ml,x(first)-step/2),bandRight=n===1?ml+22:Math.min(W-mr,x(last)+step/2);
-   grid+=`<rect x="${bandX}" y="${mt}" width="${Math.max(0,bandRight-bandX)}" height="${plotH}" rx="14" class="week-focus-band"/><text x="${bandX+10}" y="${mt-11}" class="week-week-label">ÚLTIMOS 7 DIAS</text>`;
- }
- const flush=(arr,isWeek)=>{
-   if(arr.length<2)return;
-   const d=arr.map((p,i)=>(i?'L':'M')+x(p.i)+','+y(p.value)).join(' ');
-   if(isWeek)weekSegments+=`<path d="${d}" class="week-line-week"/>`;
-   else historySegments+=`<path d="${d}" class="week-line-history"/>`;
- };
- let run=[],weekRun=[];
- points.forEach((p,i)=>{
-   if(!p.registered){flush(run,false);run=[];flush(weekRun,true);weekRun=[];return;}
-   run.push({i,value:p.value});
-   if(inCurrentWeek(p))weekRun.push({i,value:p.value});
-   else if(weekRun.length){flush(weekRun,true);weekRun=[];}
- });
- flush(run,false);flush(weekRun,true);
- points.forEach((p,i)=>{
-   const xx=x(i),active=p.date===todayDate,d=p.date.split('-').reverse().join('/');
-   if(active)labels+=`<line x1="${xx}" y1="${mt}" x2="${xx}" y2="${mt+plotH}" class="week-today-line"/>`;
-   if(p.registered){
-     const color=statusColor[p.status]||'var(--line2)';
-     pointsSvg+=`<circle cx="${xx}" cy="${y(p.value)}" r="7.2" fill="var(--panel)" stroke="${color}" stroke-width="3" class="week-point"><title>${d} · ${esc(STATUS[p.status].label)} · ${p.value}/10</title></circle><circle cx="${xx}" cy="${y(p.value)}" r="2.6" fill="${color}" class="week-point-core" aria-hidden="true"/>`;
-   }else{
-     pointsSvg+=`<circle cx="${xx}" cy="${y(0)}" r="4.8" class="week-point-unregistered"><title>${d} · Sem registro</title></circle>`;
-   }
-   const dt=new Date(p.date+'T00:00:00'),dow=dt.toLocaleDateString('pt-BR',{weekday:'short'}).replace('.','').slice(0,3);
-   labels+=`<text x="${xx}" y="${H-31}" text-anchor="middle" class="week-x ${active?'active':''}">${dow}</text><text x="${xx}" y="${H-13}" text-anchor="middle" class="week-date ${active?'active':''}">${dt.getDate()}</text>`;
- });
+ const weekIndexes=dates.map((date,i)=>inWeek(date)?i:null).filter(i=>i!==null);
+ if(weekIndexes.length){const first=weekIndexes[0],last=weekIndexes[weekIndexes.length-1],step=n===1?0:plotW/(n-1),bandX=n===1?ml-22:Math.max(ml,x(first)-step/2),bandRight=n===1?ml+22:Math.min(W-mr,x(last)+step/2);grid+=`<rect x="${bandX}" y="${mt}" width="${Math.max(0,bandRight-bandX)}" height="${plotH}" rx="14" class="week-focus-band"/><text x="${bandX+10}" y="${mt-11}" class="week-week-label">ÚLTIMOS 7 DIAS</text>`}
+ const pathFor=points=>points.map((p,i)=>(i?'L':'M')+x(p.index)+','+y(p.value)).join(' ');
+ series.filter(s=>!s.primary).forEach(member=>{let run=[];const flush=()=>{if(run.length>1)comparisonLines+=`<path d="${pathFor(run)}" class="week-line-comparison-user" stroke="${member.color}"/>`;run=[]};member.points.forEach(p=>{if(!p.registered){flush();return}run.push(p)});flush()});
+ const main=series.find(s=>s.primary);
+ if(main){let run=[];const flush=()=>{if(run.length>1)primaryHistory+=`<path d="${pathFor(run)}" class="week-line-history"/>`;run=[]};main.points.forEach(p=>{if(!p.registered){flush();return}run.push(p)});flush();run=[];const flushWeek=()=>{if(run.length>1)primaryWeek+=`<path d="${pathFor(run)}" class="week-line-week"/>`;run=[]};main.points.forEach(p=>{if(!p.registered||!inWeek(p.date)){flushWeek();return}run.push(p)});flushWeek()}
+ series.filter(s=>!s.primary).concat(series.filter(s=>s.primary)).forEach(member=>member.points.forEach(p=>{if(!p.registered)return;const color=statusColor[p.status]||'var(--line2)',r=member.primary?6:4,sw=member.primary?2.8:1.7;pointsSvg+=`<circle cx="${x(p.index)}" cy="${y(p.value)}" r="${r}" fill="var(--panel)" stroke="${color}" stroke-width="${sw}" class="${member.primary?'week-point':'week-point-comparison'}"><title>${esc(member.user.name)} · ${p.date.split('-').reverse().join('/')} · ${esc(STATUS[p.status].label)} · ${p.value}/10</title></circle>`;if(member.primary)pointsSvg+=`<circle cx="${x(p.index)}" cy="${y(p.value)}" r="2.2" fill="${color}" class="week-point-core" aria-hidden="true"/>`}));
+ dates.forEach((date,i)=>{const active=date===todayDate,xx=x(i);if(active)labels+=`<line x1="${xx}" y1="${mt}" x2="${xx}" y2="${mt+plotH}" class="week-today-line"/>`;const dt=new Date(date+'T00:00:00'),dow=dt.toLocaleDateString('pt-BR',{weekday:'short'}).replace('.','').slice(0,3);labels+=`<text x="${xx}" y="${H-31}" text-anchor="middle" class="week-x ${active?'active':''}">${dow}</text><text x="${xx}" y="${H-13}" text-anchor="middle" class="week-date ${active?'active':''}">${dt.getDate()}</text>`});
+ const legend=series.map(s=>`<span class="week-chart-member ${s.primary?'is-primary':''}"><i style="background:${s.color}"></i><span>${esc(s.user.name)}${s.primary?' · você':''}</span></span>`).join('');
  container.style.overflowX='auto';container.style.overflowY='hidden';
- container.innerHTML=`<div class="progress-chart-meta"><span>${points.length} dia${points.length===1?'':'s'} no histórico</span><span>Verde = últimos 7 dias</span></div><svg class="week-chart-svg week-chart-full" viewBox="0 0 ${W} ${H}" style="width:${W}px;min-width:${W}px;height:auto" role="img" aria-label="Histórico diário desde o primeiro registro até o último. Os últimos sete dias aparecem em verde."><defs><filter id="weekPointGlowHistory"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>${grid}${historySegments}${weekSegments}${labels}${pointsSvg}</svg>`;
+ container.innerHTML=`<div class="progress-chart-meta"><span>${dates.length} dia${dates.length===1?'':'s'} no intervalo</span><span>Todos os participantes · escala 0–10</span></div><svg class="week-chart-svg week-chart-full" viewBox="0 0 ${W} ${H}" style="width:${W}px;min-width:${W}px;height:auto" role="img" aria-label="Histórico diário comparativo dos participantes selecionados; mesma escala de zero a dez e datas alinhadas."><defs><filter id="weekPointGlowHistory"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>${grid}${comparisonLines}${primaryHistory}${primaryWeek}${labels}${pointsSvg}</svg><div class="week-chart-members" aria-label="Legenda dos participantes">${legend}</div>`;
 }
 function renderProgress(){
  const me=current(),others=state.users.filter(u=>u.id!==me.id),history=historyPoints(me.id),w=weekStats(me.id),c=memberColor(me,state.users.findIndex(x=>x.id===me.id));
@@ -352,86 +331,33 @@ function renderProgress(){
  <div class="week-scale"><span><i class="red"></i>0 · Não treinou</span><span><i class="blue"></i>3 · Descanso</span><span><i class="orange"></i>6 · Treino mediano</span><span><i class="green"></i>10 · Treinou bem</span><span class="week-scale-note">Toque e arraste para ver todo o histórico.</span></div>
  </section>
  <div class="progress-top"><div class="legend-map"><span class="map-chip" style="border-color:${c};color:${c}"><i style="width:8px;height:8px;border-radius:50%;background:${c}"></i>Você</span>${others.map((u)=>{const cc=memberColor(u,state.users.findIndex(x=>x.id===u.id));return `<label class="map-chip"><input type="checkbox" data-compare="${u.id}" ${compareIds.has(u.id)?'checked':''}><i style="width:8px;height:8px;border-radius:50%;background:${cc}"></i>${esc(u.name)}</label>`}).join('')}</div></div>
- <section class="card map-box"><div class="map-box-head"><div><div class="eyebrow">Mapa do desafio</div><b>Como os seus registros se distribuíram.</b><small>Este mapa serve para comparar padrões entre participantes. Ele não é uma nota e não substitui o histórico diário.</small></div></div><div id="mapBox"></div></section>
+ <section class="card map-box"><div class="map-box-head"><div><div class="eyebrow">Mapa do desafio</div><b>Radar de desempenho · seis dimensões.</b><small>Compare consistência, distribuição dos registros e pontuação média. Cada participante selecionado aparece com sua própria forma, usando a mesma escala de 0 a 100.</small></div></div><div id="mapBox"></div></section>
  </div>`;
- drawWeekChart($('weekChart'),me.id);drawMap($('mapBox'),me.id,[...compareIds]);document.querySelectorAll('[data-compare]').forEach(x=>x.onchange=()=>{x.checked?compareIds.add(x.dataset.compare):compareIds.delete(x.dataset.compare);drawMap($('mapBox'),me.id,[...compareIds])})
+ drawWeekChart($('weekChart'),me.id,[...compareIds]);drawMap($('mapBox'),me.id,[...compareIds]);document.querySelectorAll('[data-compare]').forEach(x=>x.onchange=()=>{x.checked?compareIds.add(x.dataset.compare):compareIds.delete(x.dataset.compare);drawWeekChart($('weekChart'),me.id,[...compareIds]);drawMap($('mapBox'),me.id,[...compareIds])})
 }
 function drawMap(container,primaryId,otherIds){
- const dates=challengeDates(),n=Math.max(1,dates.length),size=560,c=280,R=214,step=2*Math.PI/n;
- const statusColor={red:'var(--danger)',blue:'var(--rest)',orange:'var(--warn)',green:'var(--success)'};
- const hexPoint=(radius,angle)=>{
-   const a=((angle%(2*Math.PI))+2*Math.PI)%(2*Math.PI),sector=Math.floor(a/(Math.PI/3)),center=sector*Math.PI/3+Math.PI/6;
-   const half=Math.PI/6,delta=a-center;
-   const edge=radius*Math.cos(half)/Math.cos(delta);
-   return {x:c+edge*Math.cos(a),y:c+edge*Math.sin(a)};
- };
- const hexPath=(radius)=>{
-   const pts=[]; for(let k=0;k<6;k++){const a=-Math.PI/2+k*Math.PI/3;pts.push([c+radius*Math.cos(a),c+radius*Math.sin(a)]);} return pts.map((p,i)=>(i?'L':'M')+p[0]+','+p[1]).join(' ')+' Z';
- };
- const hexGrid=(radius)=>{
-   const pts=[]; for(let k=0;k<6;k++){const a=-Math.PI/2+k*Math.PI/3;pts.push([c+radius*Math.cos(a),c+radius*Math.sin(a)]);} return pts.map(p=>p.join(',')).join(' ');
- };
- let s='<svg viewBox="0 0 '+size+' '+size+'" role="img" aria-label="Mapa hexagonal de evolução do calendário"><defs>'+
-   '<linearGradient id="primaryFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--accent)" stop-opacity=".28"/><stop offset="100%" stop-color="var(--accent)" stop-opacity=".02"/></linearGradient>'+
-   '<filter id="mapGlow"><feGaussianBlur stdDeviation="5"/></filter></defs>';
- [3,6,10].forEach(function(v){
-   const rr=R*v/10;
-   s+='<polygon class="map-ring map-ring-'+v+'" points="'+hexGrid(rr)+'" fill="none" stroke="currentColor" opacity="'+(v===10?.16:.09)+'"/>';
-   s+='<text x="'+(c+8)+'" y="'+(c-rr+4)+'" class="radar-label" opacity=".72">'+v+'</text>';
- });
- for(let k=0;k<6;k++){
-   const a=-Math.PI/2+k*Math.PI/3,p=hexPoint(R,a);
-   s+='<line x1="'+c+'" y1="'+c+'" x2="'+p.x+'" y2="'+p.y+'" stroke="currentColor" opacity=".045"/>';
- }
- for(let i=0;i<n;i+=Math.max(1,Math.floor(n/12))){
-   const a=-Math.PI/2+i*step,p=hexPoint(R+16,a),d=dates[i].split('-').slice(1).reverse().join('/');
-   s+='<text x="'+p.x+'" y="'+p.y+'" text-anchor="'+(Math.cos(a)>.35?'start':Math.cos(a)<-.35?'end':'middle')+'" class="radar-label">'+d+'</text>';
- }
- function draw(u,primary){
-   const idx=state.users.findIndex(function(x){return x.id===u.id;}),color=memberColor(u,idx),days=state.days[u.id]||{};
-   let segment=[];
-   function addSegment(pts){
-     if(pts.length===1){
-       s+='<circle class="map-point" style="animation-delay:'+((pts[0].index)*22)+'ms" cx="'+pts[0].x+'" cy="'+pts[0].y+'" r="'+(primary?5:3.5)+'" fill="'+color+'" opacity="'+(primary?.9:.22)+'"/>';
-       return;
-     }
-     const pointsString=pts.map(function(p){return p.x+','+p.y;}).join(' ');
-     const closesShape=pts[0].index===0 && pts[pts.length-1].index===n-1;
-     const linePoints=closesShape ? pointsString+' '+pts[0].x+','+pts[0].y : pointsString;
-     s+='<polyline class="map-line" pathLength="1" style="animation-delay:'+((pts[0].index)*18)+'ms" points="'+linePoints+'" stroke="'+color+'" stroke-width="'+(primary?6:3)+'" '+(primary?'':'stroke-dasharray="6 7"')+' opacity="'+(primary?.92:.26)+'"/>';
-     if(primary && closesShape)s+='<polygon points="'+linePoints+'" fill="url(#primaryFill)" opacity=".9"/>';
-     pts.forEach(function(pt){
-       const delay=pt.index*22;
-       s+='<g class="map-point" style="animation-delay:'+delay+'ms">'+
-          '<title>'+pt.date.split('-').reverse().join('/')+' · '+STATUS[pt.status].label+'</title>'+
-          '<circle cx="'+pt.x+'" cy="'+pt.y+'" r="'+(primary?6.5:4.7)+'" fill="'+color+'" opacity="'+(primary?.3:.14)+'" filter="url(#mapGlow)"/>'+
-          '<circle class="map-status-dot" cx="'+pt.x+'" cy="'+pt.y+'" r="'+(primary?4:3)+'" fill="'+statusColor[pt.status]+'" stroke="'+color+'" stroke-width="'+(primary?1.8:1.2)+'" opacity="'+(primary?.98:.5)+'"/>'+
-          '</g>';
-     });
-   }
-   for(let i=0;i<n;i++){
-     const date=dates[i],status=days[date]&&days[date].status;
-     if(!status){if(segment.length){addSegment(segment);segment=[];}continue;}
-     const a=-Math.PI/2+i*step,v=STATUS[status].value;
-     // O ponto de cada dia é projetado sobre a mesma família de hexágonos do grid.
-     // Assim, 3/6/10 ficam exatamente sobre os anéis correspondentes, em vez de
-     // parecerem deslocados para uma área vazia.
-     const edge=hexPoint(R,a),rr=v/10;
-     const pt={x:c+(edge.x-c)*rr,y:c+(edge.y-c)*rr,status:status,date:date,index:i};
-     if(segment.length===0 || i===segment[segment.length-1].index+1)segment.push(pt);
-     else{addSegment(segment);segment=[pt];}
-   }
-   if(segment.length)addSegment(segment);
- }
- state.users.filter(function(u){return u.id!==primaryId&&otherIds.includes(u.id);}).forEach(function(u){draw(u,false);});
- const primary=state.users.find(function(u){return u.id===primaryId;})||current();
- draw(primary,true);
- const score=progress(primary.id).score;
- const dash=Math.max(1,Math.round(score*.62));
- s+='<polygon points="'+hexGrid(40)+'" fill="var(--panel)" stroke="var(--accent)" stroke-width="1.5" opacity=".97"/>'+
-    '<polygon points="'+hexGrid(33)+'" fill="none" stroke="var(--accent)" stroke-width="4" stroke-dasharray="'+dash+' 200" stroke-linecap="round" transform="rotate(-90 '+c+' '+c+')" opacity=".28"/>'+
-    '<text x="'+c+'" y="'+(c-1)+'" text-anchor="middle" class="map-center-score">'+score+'<tspan class="map-center-sub" x="'+c+'" dy="13">/100</tspan></text></svg>';
- container.innerHTML=s;
+ if(!container)return;
+ const size=640,c=320,R=200;
+ const selected=Array.isArray(otherIds)?otherIds:(typeof compareIds!=='undefined'?[...compareIds]:[]);
+ const axes=['Consistência','Treinos bons','Treino mediano','Descanso','Não treinou','Pontuação média'];
+ const angles=axes.map((_,i)=>-Math.PI/2+i*Math.PI/3),dates=challengeDates(),elapsed=Math.max(1,dates.length),rings=[20,40,60,80,100];
+ const members=[...new Set([primaryId,...selected].filter(Boolean))].map(id=>state.users.find(u=>u.id===id)).filter(Boolean);
+ const primary=members.find(u=>u.id===primaryId)||current();
+ if(primary&&!members.some(u=>u.id===primary.id))members.push(primary);
+ const ordered=[...members.filter(u=>u.id!==primaryId),...members.filter(u=>u.id===primaryId)];
+ const metrics=userId=>{const days=state.days[userId]||{},counts={red:0,blue:0,orange:0,green:0};let registered=0;dates.forEach(date=>{const status=days[date]?.status;if(status&&Object.prototype.hasOwnProperty.call(counts,status)){counts[status]++;registered++}});const pct=count=>Math.round(count/elapsed*100);return{registered,values:[Math.round(registered/elapsed*100),pct(counts.green),pct(counts.orange),pct(counts.blue),pct(counts.red),progress(userId).score]}};
+ const pt=(value,angle)=>{const r=R*Math.max(0,Math.min(100,value))/100;return{x:c+r*Math.cos(angle),y:c+r*Math.sin(angle)}};
+ const pointsFor=values=>values.map((value,i)=>{const p=pt(value,angles[i]);return`${p.x.toFixed(2)},${p.y.toFixed(2)}`}).join(' ');
+ const gridPoints=scale=>angles.map(a=>`${(c+R*scale*Math.cos(a)).toFixed(2)},${(c+R*scale*Math.sin(a)).toFixed(2)}`).join(' ');
+ let svg=`<svg class="radar-svg" viewBox="0 0 ${size} ${size}" role="img" aria-label="Radar de desempenho com seis dimensões, cinco anéis de referência e escala de zero a cem."><defs><linearGradient id="radarPrimaryFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--accent)" stop-opacity=".25"/><stop offset="100%" stop-color="var(--accent)" stop-opacity=".045"/></linearGradient></defs>`;
+ // Five evenly spaced rings, including the perimeter; no decorative mini-hexagon in the center.
+ rings.forEach(level=>{svg+=`<polygon class="map-ring radar-ring" points="${gridPoints(level/100)}" fill="none" stroke="currentColor" opacity="${level===100?.25:.13}"/>`;const p=pt(level,-Math.PI/2);svg+=`<text x="${c+7}" y="${p.y+4}" class="radar-label radar-scale-label">${level}</text>`});
+ angles.forEach(a=>{const p=pt(100,a);svg+=`<line x1="${c}" y1="${c}" x2="${p.x.toFixed(2)}" y2="${p.y.toFixed(2)}" class="map-axis-guide"/>`});
+ axes.forEach((label,i)=>{const a=angles[i],rr=R+37,x=c+rr*Math.cos(a),y=c+rr*Math.sin(a)+3,anchor=Math.cos(a)>.35?'start':Math.cos(a)<-.35?'end':'middle';svg+=`<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" text-anchor="${anchor}" class="radar-label radar-axis-label">${esc(label)}</text>`});
+ ordered.forEach(user=>{const isPrimary=user.id===primaryId,userIndex=state.users.findIndex(u=>u.id===user.id),color=isPrimary?'var(--accent)':memberColor(user,userIndex),data=metrics(user.id);if(!data.registered)return;const points=pointsFor(data.values);if(isPrimary)svg+=`<polygon points="${points}" fill="url(#radarPrimaryFill)" stroke="none"/>`;svg+=`<polygon points="${points}" fill="${isPrimary?'var(--accent)':'none'}" fill-opacity="${isPrimary?.045:0}" stroke="${color}" stroke-width="${isPrimary?3.4:2.3}" stroke-linejoin="round" ${isPrimary?'':'stroke-dasharray="6 4"'} opacity="${isPrimary?1:.86}" vector-effect="non-scaling-stroke"><title>${esc(user.name)} · ${data.registered} registros</title></polygon>`;data.values.forEach((value,i)=>{const p=pt(value,angles[i]);if(value>0)svg+=`<circle cx="${p.x.toFixed(2)}" cy="${p.y.toFixed(2)}" r="${isPrimary?4.3:3.3}" fill="${color}" stroke="var(--panel)" stroke-width="1.5" vector-effect="non-scaling-stroke"><title>${esc(user.name)} · ${axes[i]}: ${value}/100</title></circle>`})});
+ svg+='</svg>';
+ const legend=ordered.map(user=>{const isPrimary=user.id===primaryId,idx=state.users.findIndex(u=>u.id===user.id),color=isPrimary?'var(--accent)':memberColor(user,idx),data=metrics(user.id);return`<span class="radar-member-key"><i style="--member-color:${color}"></i><b>${esc(user.name)}${isPrimary?' · você':''}</b><small>${data.registered} registros · média ${data.values[5]}/100</small></span>`}).join('');
+ container.innerHTML=svg+`<div class="map-chart-legend radar-chart-legend">${legend}<p><b>Como ler:</b> cada eixo mostra uma dimensão em escala de 0 a 100. Consistência e categorias usam os dias decorridos do desafio; a pontuação média usa os registros existentes. Dias sem registro não são classificados como “não treinou”.</p></div>`;
 }
 function renderNotes(){const all=Object.entries(state.days).flatMap(([uid,ds])=>Object.entries(ds).filter(([,v])=>v.note).map(([date,v])=>({uid,date,...v}))).sort((a,b)=>b.date.localeCompare(a.date));const isGroup=workspaceMode==='group'&&state.group;const filters=isGroup?`<div class="note-filter"><button class="soft active" data-note-filter="all">Todas</button>${state.users.map(u=>`<button class="soft" data-note-filter="${u.id}">${esc(u.name.split(' ')[0])}</button>`).join('')}</div>`:'';$('page-notes').innerHTML=`<div class="head"><div><div class="eyebrow">Anotações · ${isGroup?'Sala':'Pessoal'}</div><h1>${isGroup?'O que aconteceu na sala.':'O que aconteceu.'}</h1><p>${isGroup?'Um histórico simples das anotações compartilhadas com os participantes da sala.':'Seu histórico privado de anotações, separado das salas.'}</p></div></div><div class="card">${filters}<div id="notesList" class="notes"></div></div>`;const list=$('notesList');const draw=f=>{const notes=f==='all'?all:all.filter(n=>n.uid===f);list.innerHTML=notes.length?notes.map(n=>{const u=state.users.find(x=>x.id===n.uid);return `<article class="note"><div class="note-head"><div style="display:flex;align-items:center;gap:8px"><span class="group-avatar" style="width:27px;height:27px;background:${memberColor(u,state.users.findIndex(x=>x.id===u.id))}">${getPhoto(u)?`<img src="${esc(getPhoto(u))}" alt="" loading="eager">`:esc(u?.initials||'P')}</span><b>${esc(u?.name||'Pessoa')}</b></div><span>${esc(n.date.split('-').reverse().join('/'))}</span></div><p>${esc(n.note)}</p></article>`}).join(''):'<div style="color:var(--muted);font-size:12px;padding:8px 0">Ainda não há anotações para este espaço.</div>'};draw('all');document.querySelectorAll('[data-note-filter]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-note-filter]').forEach(x=>x.classList.toggle('active',x===b));draw(b.dataset.noteFilter)})}
 
@@ -574,273 +500,4 @@ function installAccountActionSpacingFix(){
 $('retryBoot').onclick=boot;
 installAccountActionSpacingFix();
 boot();
-})();
-/* Shape Together — revisão de gráficos de progressão e radar hexagonal.
- * Carregar depois de /js/app.js. Reutiliza os dados e as regras já existentes.
- */
-(function () {
-  'use strict';
-
-  // O gráfico temporal usa um único eixo de datas para todos os participantes.
-  // Assim, um ponto em uma data representa o mesmo dia em todas as séries.
-  window.drawWeekChart = function drawWeekChart(container, primaryId, otherIds) {
-    if (!container || typeof state === 'undefined' || !state) return;
-
-    const selectedIds = Array.from(new Set([
-      primaryId,
-      ...(Array.isArray(otherIds) ? otherIds : (typeof compareIds !== 'undefined' ? Array.from(compareIds) : []))
-    ].filter(Boolean)));
-    const members = selectedIds
-      .map(id => state.users.find(user => user.id === id))
-      .filter(Boolean);
-    const primary = members.find(user => user.id === primaryId) || current();
-    if (primary && !members.some(user => user.id === primary.id)) members.unshift(primary);
-
-    const allDates = challengeDates();
-    const relevantDates = allDates.filter(date => members.some(user => state.days[user.id]?.[date]?.status));
-    if (!relevantDates.length) {
-      container.innerHTML = '<div class="progress-empty"><strong>Ainda não há registros suficientes.</strong><span>Marque pelo menos um dia no calendário para ver a evolução. Na sala, as linhas dos participantes usam as mesmas datas e a mesma escala.</span></div>';
-      return;
-    }
-
-    const first = allDates.indexOf(relevantDates[0]);
-    const last = allDates.indexOf(relevantDates[relevantDates.length - 1]);
-    const dates = allDates.slice(first, last + 1);
-    const n = dates.length;
-    const W = Math.max(920, 78 + (n - 1) * 54);
-    const H = 356, ml = 50, mr = 28, mt = 38, mb = 76;
-    const plotW = W - ml - mr, plotH = H - mt - mb;
-    const x = i => n === 1 ? ml + plotW / 2 : ml + plotW * i / (n - 1);
-    const y = value => mt + plotH - (Math.max(0, Math.min(10, value)) / 10) * plotH;
-    const todayDate = today();
-    const weekStart = new Date(todayDate + 'T00:00:00');
-    weekStart.setDate(weekStart.getDate() - 6);
-    const weekStartDate = iso(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate());
-    const inCurrentWeek = date => date >= weekStartDate && date <= todayDate;
-    const statusColor = { red: 'var(--danger)', blue: 'var(--rest)', orange: 'var(--warn)', green: 'var(--success)' };
-
-    const series = members.map((user, index) => ({
-      user,
-      primary: user.id === primaryId,
-      color: memberColor(user, state.users.findIndex(candidate => candidate.id === user.id)),
-      points: dates.map((date, i) => {
-        const status = state.days[user.id]?.[date]?.status || null;
-        return { date, index: i, status, registered: Boolean(status), value: status ? STATUS[status].value : null };
-      })
-    }));
-
-    let grid = '', labels = '', historySegments = '', weekSegments = '', comparisonSegments = '', pointsSvg = '';
-    [0, 3, 6, 10].forEach(value => {
-      const yy = y(value);
-      grid += `<line x1="${ml}" y1="${yy}" x2="${W - mr}" y2="${yy}" class="week-grid"/><text x="${ml - 11}" y="${yy + 4}" text-anchor="end" class="week-y">${value}</text>`;
-    });
-
-    const weekIndexes = dates.map((date, i) => inCurrentWeek(date) ? i : null).filter(i => i !== null);
-    if (weekIndexes.length) {
-      const firstWeek = weekIndexes[0], lastWeek = weekIndexes[weekIndexes.length - 1];
-      const step = n === 1 ? 0 : plotW / (n - 1);
-      const bandX = n === 1 ? ml - 22 : Math.max(ml, x(firstWeek) - step / 2);
-      const bandRight = n === 1 ? ml + 22 : Math.min(W - mr, x(lastWeek) + step / 2);
-      grid += `<rect x="${bandX}" y="${mt}" width="${Math.max(0, bandRight - bandX)}" height="${plotH}" rx="14" class="week-focus-band"/><text x="${bandX + 10}" y="${mt - 11}" class="week-week-label">ÚLTIMOS 7 DIAS</text>`;
-    }
-
-    function pathFor(points) {
-      return points.map((point, index) => `${index ? 'L' : 'M'}${x(point.index)},${y(point.value)}`).join(' ');
-    }
-    function appendRuns(memberSeries, kind) {
-      let run = [];
-      const flush = () => {
-        if (run.length > 1) {
-          const d = pathFor(run);
-          if (kind === 'primary') historySegments += `<path d="${d}" class="week-line-history"/>`;
-          else comparisonSegments += `<path d="${d}" class="week-line-comparison-user" stroke="${memberSeries.color}"/>`;
-        }
-        run = [];
-      };
-      memberSeries.points.forEach(point => {
-        if (!point.registered) { flush(); return; }
-        run.push(point);
-      });
-      flush();
-    }
-
-    // Comparações vão atrás da série principal para ela continuar legível.
-    series.filter(s => !s.primary).forEach(s => appendRuns(s, 'comparison'));
-    const mainSeries = series.find(s => s.primary);
-    if (mainSeries) {
-      appendRuns(mainSeries, 'primary');
-      let run = [];
-      const flushWeek = () => {
-        if (run.length > 1) weekSegments += `<path d="${pathFor(run)}" class="week-line-week"/>`;
-        run = [];
-      };
-      mainSeries.points.forEach(point => {
-        if (!point.registered || !inCurrentWeek(point.date)) { flushWeek(); return; }
-        run.push(point);
-      });
-      flushWeek();
-    }
-
-    series.filter(s => !s.primary).concat(series.filter(s => s.primary)).forEach(memberSeries => {
-      memberSeries.points.forEach(point => {
-        if (!point.registered) return;
-        const active = point.date === todayDate;
-        const dateLabel = point.date.split('-').reverse().join('/');
-        const color = statusColor[point.status] || 'var(--line2)';
-        const radius = memberSeries.primary ? 6.2 : 4.2;
-        const strokeWidth = memberSeries.primary ? 2.8 : 1.7;
-        pointsSvg += `<circle cx="${x(point.index)}" cy="${y(point.value)}" r="${radius}" fill="var(--panel)" stroke="${color}" stroke-width="${strokeWidth}" class="${memberSeries.primary ? 'week-point' : 'week-point-comparison'}"><title>${esc(memberSeries.user.name)} · ${dateLabel} · ${esc(STATUS[point.status].label)} · ${point.value}/10</title></circle>`;
-        if (memberSeries.primary) pointsSvg += `<circle cx="${x(point.index)}" cy="${y(point.value)}" r="2.2" fill="${color}" class="week-point-core" aria-hidden="true"/>`;
-      });
-    });
-
-    dates.forEach((date, i) => {
-      const active = date === todayDate, xx = x(i);
-      if (active) labels += `<line x1="${xx}" y1="${mt}" x2="${xx}" y2="${mt + plotH}" class="week-today-line"/>`;
-      const dt = new Date(date + 'T00:00:00');
-      const dow = dt.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '').slice(0, 3);
-      labels += `<text x="${xx}" y="${H - 31}" text-anchor="middle" class="week-x ${active ? 'active' : ''}">${dow}</text><text x="${xx}" y="${H - 13}" text-anchor="middle" class="week-date ${active ? 'active' : ''}">${dt.getDate()}</text>`;
-    });
-
-    const legend = series.map(memberSeries => `<span class="week-chart-member ${memberSeries.primary ? 'is-primary' : ''}"><i style="background:${memberSeries.primary ? 'var(--accent)' : memberSeries.color}"></i><span>${esc(memberSeries.user.name)}${memberSeries.primary ? ' · você' : ''}</span></span>`).join('');
-    container.style.overflowX = 'auto';
-    container.style.overflowY = 'hidden';
-    container.innerHTML = `<div class="progress-chart-meta"><span>${dates.length} dia${dates.length === 1 ? '' : 's'} no intervalo</span><span>Escala comum: 0–10 · verde destaca sua semana</span></div><svg class="week-chart-svg week-chart-full" viewBox="0 0 ${W} ${H}" style="width:${W}px;min-width:${W}px;height:auto" role="img" aria-label="Histórico diário comparável entre os participantes selecionados. Todos usam as mesmas datas e a escala de zero a dez."><defs><filter id="weekPointGlowHistory"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>${grid}${comparisonSegments}${historySegments}${weekSegments}${labels}${pointsSvg}</svg><div class="week-chart-members" aria-label="Legenda dos participantes">${legend}</div>`;
-  };
-
-  // O mapa passa a ser um radar de seis dimensões comparáveis, como os usados
-  // em jogos: cada eixo tem a mesma escala percentual, do centro (0) à borda (100).
-  const originalMap = window.drawMap;
-  window.drawMap = function drawMap(container, primaryId, otherIds) {
-    const size = 620, c = 310, R = 210;
-    const selected = (Array.isArray(otherIds) ? otherIds : (typeof compareIds !== 'undefined' ? Array.from(compareIds) : []));
-    const names = ['Consistência', 'Treinos bons', 'Treino mediano', 'Descanso', 'Não treinou', 'Pontuação média'];
-    const angles = names.map((_, index) => -Math.PI / 2 + index * Math.PI / 3);
-    const axes = [
-      'Consistência', 'Treinos bons', 'Treino mediano', 'Descanso', 'Não treinou', 'Pontuação média'
-    ];
-    const dates = challengeDates();
-    const elapsed = Math.max(1, dates.length);
-    const ringLevels = [20, 40, 60, 80, 100];
-
-    const metrics = userId => {
-      const days = state.days[userId] || {};
-      const counts = { red: 0, blue: 0, orange: 0, green: 0 };
-      let registered = 0;
-      dates.forEach(date => {
-        const status = days[date]?.status;
-        if (status && Object.prototype.hasOwnProperty.call(counts, status)) {
-          counts[status] += 1;
-          registered += 1;
-        }
-      });
-      const pct = count => Math.round(count / elapsed * 100);
-      return {
-        values: [
-          Math.round(registered / elapsed * 100),
-          pct(counts.green), pct(counts.orange), pct(counts.blue), pct(counts.red),
-          progress(userId).score
-        ],
-        registered,
-        counts
-      };
-    };
-    const pointAt = (value, angle) => {
-      const radius = R * Math.max(0, Math.min(100, value)) / 100;
-      return { x: c + radius * Math.cos(angle), y: c + radius * Math.sin(angle) };
-    };
-    const polygonPoints = (values, radiusScale = 1) => values.map((value, index) => {
-      const p = pointAt(value * radiusScale, angles[index]);
-      return `${p.x.toFixed(2)},${p.y.toFixed(2)}`;
-    }).join(' ');
-    const gridPoints = scale => angles.map(angle => `${(c + R * scale * Math.cos(angle)).toFixed(2)},${(c + R * scale * Math.sin(angle)).toFixed(2)}`).join(' ');
-
-    let s = `<svg viewBox="0 0 ${size} ${size}" role="img" aria-label="Gráfico de radar hexagonal com seis dimensões de desempenho, em escala de zero a cem por cento."><defs><linearGradient id="primaryFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--accent)" stop-opacity=".27"/><stop offset="100%" stop-color="var(--accent)" stop-opacity=".06"/></linearGradient><filter id="radarGlow"><feGaussianBlur stdDeviation="3.5"/></filter></defs>`;
-
-    // Anéis concêntricos regulares: todos ficam dentro da moldura do radar.
-    ringLevels.forEach(level => {
-      s += `<polygon class="map-ring radar-ring" points="${gridPoints(level / 100)}" fill="none" stroke="currentColor" opacity="${level === 100 ? .27 : .13}"/>`;
-      const labelY = c - R * level / 100 + 4;
-      s += `<text x="${c + 7}" y="${labelY}" class="radar-label radar-scale-label">${level}</text>`;
-    });
-
-    // Seis guias terminam exatamente nos vértices do hexágono externo.
-    angles.forEach(angle => {
-      const p = pointAt(100, angle);
-      s += `<line x1="${c}" y1="${c}" x2="${p.x}" y2="${p.y}" class="map-axis-guide"/>`;
-    });
-
-    // Rótulos posicionados fora do contorno, com espaço próprio para telas menores.
-    axes.forEach((label, index) => {
-      const angle = angles[index], radius = R + 37;
-      const x = c + radius * Math.cos(angle), y = c + radius * Math.sin(angle) + 3;
-      const anchor = Math.cos(angle) > .35 ? 'start' : Math.cos(angle) < -.35 ? 'end' : 'middle';
-      s += `<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" text-anchor="${anchor}" class="radar-label radar-axis-label">${esc(label)}</text>`;
-    });
-
-    const visibleUsers = (state.users || []).filter(user => user.id === primaryId || (user.id !== primaryId && selected.includes(user.id)));
-    const comparisonUsers = visibleUsers.filter(user => user.id !== primaryId);
-    const primary = visibleUsers.find(user => user.id === primaryId) || state.users.find(user => user.id === primaryId) || current();
-    const orderedUsers = [...comparisonUsers, ...(primary ? [primary] : [])];
-
-    orderedUsers.forEach(user => {
-      const isPrimary = user.id === primaryId;
-      const userIndex = state.users.findIndex(candidate => candidate.id === user.id);
-      const color = isPrimary ? 'var(--accent)' : memberColor(user, userIndex);
-      const data = metrics(user.id);
-      const pts = polygonPoints(data.values);
-      // Não há preenchimento com aparência de nota quando ainda não há registros.
-      if (data.registered > 0) {
-        if (isPrimary) s += `<polygon points="${pts}" fill="url(#primaryFill)" stroke="none"/>`;
-        s += `<polygon points="${pts}" fill="none" stroke="${color}" stroke-width="${isPrimary ? 3.4 : 2.2}" stroke-linejoin="round" ${isPrimary ? '' : 'stroke-dasharray="5 5"'} opacity="${isPrimary ? .98 : .82}" vector-effect="non-scaling-stroke"><title>${esc(user.name)} · ${data.registered} dias registrados</title></polygon>`;
-        data.values.forEach((value, index) => {
-          const point = pointAt(value, angles[index]);
-          if (value > 0) s += `<circle cx="${point.x}" cy="${point.y}" r="${isPrimary ? 4.2 : 3.2}" fill="${color}" stroke="var(--panel)" stroke-width="1.5" vector-effect="non-scaling-stroke"><title>${esc(user.name)} · ${axes[index]}: ${value}%</title></circle>`;
-        });
-      }
-    });
-    s += '</svg>';
-
-    const legend = orderedUsers.map(user => {
-      const isPrimary = user.id === primaryId;
-      const userIndex = state.users.findIndex(candidate => candidate.id === user.id);
-      const color = isPrimary ? 'var(--accent)' : memberColor(user, userIndex);
-      const data = metrics(user.id);
-      return `<span class="radar-member-key"><i style="--member-color:${color}"></i><b>${esc(user.name)}${isPrimary ? ' · você' : ''}</b><small>${data.registered} dias · média ${data.values[5]}/100</small></span>`;
-    }).join('');
-    container.innerHTML = s + `<div class="map-chart-legend radar-chart-legend">${legend}<p><b>Como ler:</b> cada eixo representa uma dimensão; quanto mais longe do centro, maior o valor. Consistência e categorias usam os dias decorridos do desafio; pontuação média considera os registros existentes. Dias sem registro não são classificados automaticamente como “não treinou”.</p></div>`;
-  };
-
-  // Mantém o título e a descrição coerentes com o novo gráfico de atributos.
-  function updateRadarCopy() {
-    const box = document.querySelector('.map-box-head');
-    const title = box && box.querySelector('b');
-    const description = box && box.querySelector('small');
-    if (title) title.textContent = 'Radar de desempenho · seis dimensões';
-    if (description) description.textContent = 'Compare consistência, distribuição dos registros e pontuação média. No modo sala, as pessoas selecionadas aparecem no mesmo radar, com a mesma escala.';
-  }
-  const appRender = window.renderApp;
-  if (typeof appRender === 'function' && !window.__radarUxRenderWrapped) {
-    window.renderApp = function () {
-      const result = appRender.apply(this, arguments);
-      updateRadarCopy();
-      return result;
-    };
-    window.__radarUxRenderWrapped = true;
-  }
-
-  // O filtro de participantes passa a atualizar os dois gráficos, não só o mapa.
-  document.addEventListener('change', event => {
-    const target = event.target;
-    if (!target || !target.matches || !target.matches('[data-compare]')) return;
-    if (typeof compareIds !== 'undefined' && typeof current === 'function') {
-      const me = current();
-      const chart = document.getElementById('weekChart');
-      if (me && chart) window.drawWeekChart(chart, me.id, Array.from(compareIds));
-    }
-  });
-
-  // Caso o estado local já tenha sido carregado antes deste patch, redesenha com
-  // as novas funções. Em carregamento online, renderApp seguirá usando-as também.
-  try { if (typeof state !== 'undefined' && state && typeof renderApp === 'function') renderApp(); } catch (error) { console.warn('[Shape Together] Gráficos atualizados; renderização inicial mantida.', error); }
 })();
