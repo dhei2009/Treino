@@ -1,12 +1,11 @@
 (()=>{'use strict';
 // Centralize the visible release notes. Bump RELEASE_VERSION whenever you publish a named release.
-const RELEASE_VERSION='9.9.5';
+const RELEASE_VERSION='10.0.0';
 const RELEASE_HISTORY=[
- {version:'9.9.5',title:'Nova identidade em preto e laranja',desc:'Ícone redesenhado com aro laranja luminoso e haltere escuro com reflexos quentes.'},
- {version:'9.9.4',title:'Avisos de atualização',desc:'Novidades exibidas na tela inicial quando uma nova versão é publicada.'},
- {version:'9.9.2',title:'Interface mais fluida',desc:'Ajustes visuais e melhorias de navegação para uma experiência mais simples.'},
- {version:'9.7.0',title:'Calendário e progresso',desc:'Mais praticidade para acompanhar os treinos e a evolução dos participantes.'},
- {version:'9.4.5',title:'Estabilidade e correções',desc:'Correções gerais e melhorias de funcionamento.'}
+ {version:'10.0.0',title:'Radar hexagonal com seis dimensões',desc:'Consistência, treinos por categoria e pontuação média em uma escala comum de 0 a 100, com uma forma para cada participante.'},
+ {version:'10.0.0',title:'Comparação mais clara entre participantes',desc:'Os filtros sincronizam o radar e o histórico diário. A legenda identifica cada pessoa e apresenta registros e média sem misturar as duas escalas.'},
+ {version:'10.0.0',title:'Legendas próprias para cada gráfico',desc:'A escala de 0, 3, 6 e 10 explica o histórico diário; o radar ganhou uma legenda separada para seus seis indicadores e suas regras de cálculo.'},
+ {version:'10.0.0',title:'Identificação de versão e compilação',desc:'O aviso de novidades informa a versão atual e um identificador de build, com verificação de arquivos atualizados sem depender apenas do número de versão.'}
 ];
 // Capture the original asset URLs before the theme system turns the favicon into an SVG data URL.
 const RELEASE_ASSET_URLS=(()=>{
@@ -16,7 +15,7 @@ const RELEASE_ASSET_URLS=(()=>{
  document.querySelectorAll('script[src],link[rel="stylesheet"],link[rel~="icon"]').forEach(link=>{
   try{const u=new URL(link.href||link.src,location.href);if(u.origin===location.origin&&!u.href.startsWith('data:'))urls.push(u.href)}catch{}
  });
- try{urls.push(new URL('/favicon.png?v=9.9.5',location.origin).href)}catch{}
+ try{urls.push(new URL('/favicon.png?v='+encodeURIComponent(RELEASE_VERSION),location.origin).href)}catch{}
  return [...new Set(urls)];
 })();
 const RELEASE_SEEN_BUILD_KEY='shape_together_seen_build_v1';
@@ -328,10 +327,10 @@ function renderProgress(){
  <div class="week-head"><div><div class="eyebrow">Histórico diário</div><h2>Do primeiro ao último registro.</h2><p>${rangeLabel}. Os últimos 7 dias ficam destacados em verde para você enxergar a semana sem perder o histórico inteiro.</p></div></div>
  <div class="week-summary"><div class="week-summary-item"><span>Dias registrados</span><b>${history.filter(p=>p.registered).length}</b></div><div class="week-summary-item"><span>Melhor resultado</span><b>${best}<small>/10</small></b></div><div class="week-summary-item"><span>Média da semana</span><b>${w.registered?w.avg.toFixed(1).replace('.',','):'—'}<small>/10</small></b></div></div>
  <div id="weekChart" class="week-chart"></div>
- <div class="week-scale"><span><i class="red"></i>0 · Não treinou</span><span><i class="blue"></i>3 · Descanso</span><span><i class="orange"></i>6 · Treino mediano</span><span><i class="green"></i>10 · Treinou bem</span><span class="week-scale-note">Toque e arraste para ver todo o histórico.</span></div>
+ <div class="week-scale" aria-label="Legenda do histórico diário"><div class="week-scale-title">Legenda do histórico diário</div><div class="week-scale-statuses"><span><i class="red"></i><b>0</b> · Não treinou</span><span><i class="blue"></i><b>3</b> · Descanso</span><span><i class="orange"></i><b>6</b> · Treino mediano</span><span><i class="green"></i><b>10</b> · Treinou bem</span></div><p class="week-scale-note"><b>Como navegar:</b> em telas menores, deslize horizontalmente sobre o gráfico para consultar todo o histórico.</p></div>
  </section>
  <div class="progress-top"><div class="legend-map"><span class="map-chip" style="border-color:${c};color:${c}"><i style="width:8px;height:8px;border-radius:50%;background:${c}"></i>Você</span>${others.map((u)=>{const cc=memberColor(u,state.users.findIndex(x=>x.id===u.id));return `<label class="map-chip"><input type="checkbox" data-compare="${u.id}" ${compareIds.has(u.id)?'checked':''}><i style="width:8px;height:8px;border-radius:50%;background:${cc}"></i>${esc(u.name)}</label>`}).join('')}</div></div>
- <section class="card map-box"><div class="map-box-head"><div><div class="eyebrow">Mapa do desafio</div><b>Radar de desempenho · seis dimensões.</b><small>Compare consistência, distribuição dos registros e pontuação média. Cada participante selecionado aparece com sua própria forma, usando a mesma escala de 0 a 100.</small></div></div><div id="mapBox"></div></section>
+ <section class="card map-box"><div class="map-box-head"><div><div class="eyebrow">Mapa do desafio</div><b>Radar de desempenho</b><small>Compare seis indicadores na mesma escala de 0 a 100. Marque ou desmarque participantes acima para incluir ou retirar seus perfis. A linha contínua destaca você; os contornos tracejados identificam os demais.</small></div></div><div id="mapBox"></div></section>
  </div>`;
  drawWeekChart($('weekChart'),me.id,[...compareIds]);drawMap($('mapBox'),me.id,[...compareIds]);document.querySelectorAll('[data-compare]').forEach(x=>x.onchange=()=>{x.checked?compareIds.add(x.dataset.compare):compareIds.delete(x.dataset.compare);drawWeekChart($('weekChart'),me.id,[...compareIds]);drawMap($('mapBox'),me.id,[...compareIds])})
 }
@@ -356,8 +355,19 @@ function drawMap(container,primaryId,otherIds){
  axes.forEach((label,i)=>{const a=angles[i],rr=R+37,x=c+rr*Math.cos(a),y=c+rr*Math.sin(a)+3,anchor=Math.cos(a)>.35?'start':Math.cos(a)<-.35?'end':'middle';svg+=`<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" text-anchor="${anchor}" class="radar-label radar-axis-label">${esc(label)}</text>`});
  ordered.forEach(user=>{const isPrimary=user.id===primaryId,userIndex=state.users.findIndex(u=>u.id===user.id),color=isPrimary?'var(--accent)':memberColor(user,userIndex),data=metrics(user.id);if(!data.registered)return;const points=pointsFor(data.values);if(isPrimary)svg+=`<polygon points="${points}" fill="url(#radarPrimaryFill)" stroke="none"/>`;svg+=`<polygon points="${points}" fill="${isPrimary?'var(--accent)':'none'}" fill-opacity="${isPrimary?.045:0}" stroke="${color}" stroke-width="${isPrimary?3.4:2.3}" stroke-linejoin="round" ${isPrimary?'':'stroke-dasharray="6 4"'} opacity="${isPrimary?1:.86}" vector-effect="non-scaling-stroke"><title>${esc(user.name)} · ${data.registered} registros</title></polygon>`;data.values.forEach((value,i)=>{const p=pt(value,angles[i]);if(value>0)svg+=`<circle cx="${p.x.toFixed(2)}" cy="${p.y.toFixed(2)}" r="${isPrimary?4.3:3.3}" fill="${color}" stroke="var(--panel)" stroke-width="1.5" vector-effect="non-scaling-stroke"><title>${esc(user.name)} · ${axes[i]}: ${value}/100</title></circle>`})});
  svg+='</svg>';
- const legend=ordered.map(user=>{const isPrimary=user.id===primaryId,idx=state.users.findIndex(u=>u.id===user.id),color=isPrimary?'var(--accent)':memberColor(user,idx),data=metrics(user.id);return`<span class="radar-member-key"><i style="--member-color:${color}"></i><b>${esc(user.name)}${isPrimary?' · você':''}</b><small>${data.registered} registros · média ${data.values[5]}/100</small></span>`}).join('');
- container.innerHTML=svg+`<div class="map-chart-legend radar-chart-legend">${legend}<p><b>Como ler:</b> cada eixo mostra uma dimensão em escala de 0 a 100. Consistência e categorias usam os dias decorridos do desafio; a pontuação média usa os registros existentes. Dias sem registro não são classificados como “não treinou”.</p></div>`;
+ const legend=ordered.map(user=>{const isPrimary=user.id===primaryId,idx=state.users.findIndex(u=>u.id===user.id),color=isPrimary?'var(--accent)':memberColor(user,idx),data=metrics(user.id);return`<article class="radar-member-key"><i style="--member-color:${color}" aria-hidden="true"></i><div class="radar-member-copy"><b>${esc(user.name)}${isPrimary?' · você':''}</b><small>${data.registered} registro${data.registered===1?'':'s'} · média ${data.values[5]}/100</small>${data.registered?`<span class="radar-member-status">Incluído no radar</span>`:'<span class="radar-member-status is-empty">Sem dados para desenhar a forma</span>'}</div></article>`}).join('');
+ const axisDescriptions=[
+  'Percentual dos dias decorridos do desafio em que existe um registro.',
+  'Percentual dos dias decorridos marcados explicitamente como treino bom.',
+  'Percentual dos dias decorridos marcados como treino mediano.',
+  'Percentual dos dias decorridos marcados explicitamente como descanso.',
+  'Percentual dos dias marcados explicitamente como “não treinou”. Dias vazios não entram nesta categoria.',
+  'Média dos valores registrados, convertida da escala de 0–10 para 0–100.'
+ ];
+ const axisLegend=axes.map((axis,i)=>`<article class="radar-axis-key"><span class="radar-axis-number">${i+1}</span><div><b>${esc(axis)}</b><small>${esc(axisDescriptions[i])}</small></div></article>`).join('');
+ const anyData=ordered.some(user=>metrics(user.id).registered>0);
+ if(!anyData)svg=svg.replace('</svg>','<text x="320" y="305" text-anchor="middle" class="radar-empty-title">Aguardando registros</text><text x="320" y="326" text-anchor="middle" class="radar-empty-subtitle">A forma aparecerá após o primeiro registro.</text></svg>');
+ container.innerHTML=svg+`<section class="map-chart-legend radar-chart-legend" aria-label="Legenda e interpretação do radar"><div class="radar-legend-section"><div class="radar-legend-heading"><div><b>Participantes comparados</b><small>O resumo mostra quantos dias cada pessoa registrou e sua pontuação média.</small></div></div><div class="radar-members-list">${legend}</div></div><div class="radar-legend-section"><div class="radar-legend-heading"><div><b>O que cada eixo representa</b><small>As seis dimensões têm significados próprios; os anéis indicam 20, 40, 60, 80 e 100.</small></div></div><div class="radar-axis-grid">${axisLegend}</div></div><p class="radar-reading-note"><b>Importante:</b> consistência e categorias são calculadas sobre os dias decorridos do desafio. A pontuação média utiliza somente os registros existentes. Um dia vazio não é interpretado como “não treinou”. Participantes sem registros continuam na legenda, mas não recebem uma forma artificial no radar.</p></section>`;
 }
 function renderNotes(){const all=Object.entries(state.days).flatMap(([uid,ds])=>Object.entries(ds).filter(([,v])=>v.note).map(([date,v])=>({uid,date,...v}))).sort((a,b)=>b.date.localeCompare(a.date));const isGroup=workspaceMode==='group'&&state.group;const filters=isGroup?`<div class="note-filter"><button class="soft active" data-note-filter="all">Todas</button>${state.users.map(u=>`<button class="soft" data-note-filter="${u.id}">${esc(u.name.split(' ')[0])}</button>`).join('')}</div>`:'';$('page-notes').innerHTML=`<div class="head"><div><div class="eyebrow">Anotações · ${isGroup?'Sala':'Pessoal'}</div><h1>${isGroup?'O que aconteceu na sala.':'O que aconteceu.'}</h1><p>${isGroup?'Um histórico simples das anotações compartilhadas com os participantes da sala.':'Seu histórico privado de anotações, separado das salas.'}</p></div></div><div class="card">${filters}<div id="notesList" class="notes"></div></div>`;const list=$('notesList');const draw=f=>{const notes=f==='all'?all:all.filter(n=>n.uid===f);list.innerHTML=notes.length?notes.map(n=>{const u=state.users.find(x=>x.id===n.uid);return `<article class="note"><div class="note-head"><div style="display:flex;align-items:center;gap:8px"><span class="group-avatar" style="width:27px;height:27px;background:${memberColor(u,state.users.findIndex(x=>x.id===u.id))}">${getPhoto(u)?`<img src="${esc(getPhoto(u))}" alt="" loading="eager">`:esc(u?.initials||'P')}</span><b>${esc(u?.name||'Pessoa')}</b></div><span>${esc(n.date.split('-').reverse().join('/'))}</span></div><p>${esc(n.note)}</p></article>`}).join(''):'<div style="color:var(--muted);font-size:12px;padding:8px 0">Ainda não há anotações para este espaço.</div>'};draw('all');document.querySelectorAll('[data-note-filter]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-note-filter]').forEach(x=>x.classList.toggle('active',x===b));draw(b.dataset.noteFilter)})}
 
@@ -392,11 +402,17 @@ async function getReleaseBuildFingerprint(){
  if(!RELEASE_ASSET_URLS.length)return null;
  try{
   const parts=await Promise.all(RELEASE_ASSET_URLS.map(async url=>{
-   const response=await fetch(url,{cache:'no-store',credentials:'same-origin'});
-   if(!response.ok)throw new Error('Asset version check failed');
-   return url+'\n'+await response.text();
+   try{
+    const probe=new URL(url,location.href);
+    probe.searchParams.set('__st_build_probe',Date.now().toString(36)+Math.random().toString(36).slice(2,8));
+    const response=await fetch(probe.href,{cache:'no-store',credentials:'same-origin'});
+    if(!response.ok)return null;
+    const content=await response.text();
+    return url+'\n'+content;
+   }catch{return null}
   }));
-  return releaseHash(parts.join('\n---asset---\n'));
+  const usable=parts.filter(Boolean).sort();
+  return usable.length?releaseHash(usable.join('\n---asset---\n')):null;
  }catch{return null}
 }
 function addReleaseNoticeStyles(){
@@ -451,13 +467,13 @@ async function initReleaseNotice(){
  try{previousBuild=localStorage.getItem(RELEASE_SEEN_BUILD_KEY)||'';previousVersion=localStorage.getItem(RELEASE_SEEN_VERSION_KEY)||''}catch{}
  const fingerprint=await getReleaseBuildFingerprint();
  const versionChanged=previousVersion!==RELEASE_VERSION;
- const buildChanged=Boolean(fingerprint&&fingerprint!==previousBuild);
+ const buildChanged=Boolean(fingerprint&&previousBuild&&fingerprint!==previousBuild);
  if(!versionChanged&&!buildChanged&&(previousBuild||previousVersion))return;
- const automaticChange=Boolean(previousBuild&&fingerprint&&previousBuild!==fingerprint&&!versionChanged);
  addReleaseNoticeStyles();
- const dynamicEntry=automaticChange? [{version:'Atualização detectada',title:'Melhorias desde sua última visita',desc:'O Shape Together recebeu mudanças nos arquivos do site. Confira as novidades e continue de onde parou.'}]:[];
- const entries=automaticChange?[...dynamicEntry,...RELEASE_HISTORY.slice(0,2)]:RELEASE_HISTORY.slice(0,3);
- const versionLabel=automaticChange?`Atualização detectada · build ${fingerprint.slice(-6).toUpperCase()}`:`Versão ${RELEASE_VERSION}`;
+ const buildLabel=fingerprint?fingerprint.slice(-6).toUpperCase():'';
+ const dynamicEntry=buildChanged?[{version:buildLabel?'Build '+buildLabel:'Nova compilação',title:versionChanged?'Nova versão publicada':'Nova compilação publicada',desc:'Detectamos arquivos diferentes da última visita. Os destaques abaixo resumem as melhorias presentes nesta publicação.'}]:[];
+ const entries=dynamicEntry.length?[...dynamicEntry,...RELEASE_HISTORY.slice(0,3)]:RELEASE_HISTORY;
+ const versionLabel=`Versão ${RELEASE_VERSION}${buildLabel?' · build '+buildLabel:''}`;
  const backdrop=document.createElement('div');backdrop.className='st-release-backdrop';backdrop.id='stReleaseNotice';
  backdrop.innerHTML=`<section class="st-release-dialog" role="dialog" aria-modal="true" aria-labelledby="stReleaseTitle" aria-describedby="stReleaseSubtitle"><header class="st-release-top"><div class="st-release-heading"><img class="st-release-mark-image" src="/favicon.png?v=${encodeURIComponent(RELEASE_VERSION)}" alt="" width="54" height="54"><div><span class="st-release-kicker">NOVIDADES DO APLICATIVO</span><h2 class="st-release-title" id="stReleaseTitle">Shape Together <span class="st-release-title-accent">foi atualizado!</span></h2><p class="st-release-subtitle" id="stReleaseSubtitle">Novidades desde sua última visita.</p><span class="st-release-version"><i class="st-release-version-dot" aria-hidden="true"></i>${esc(versionLabel)}</span></div></div></header><div class="st-release-content"><ul class="st-release-list">${entries.map((item,index)=>`<li class="st-release-item st-release-tone-${index%3}"><span class="st-release-item-dot" aria-hidden="true"></span><div><span class="st-release-item-version">${esc(item.version)}</span><strong class="st-release-item-title">${esc(item.title)}</strong><p class="st-release-item-desc">${esc(item.desc)}</p></div></li>`).join('')}</ul></div><footer class="st-release-footer"><div class="st-release-allgood"><span class="st-release-check" aria-hidden="true">✓</span><div><strong>Tudo em dia!</strong><p>Veja o que mudou e continue sua jornada.</p></div></div><button class="st-release-continue" id="stReleaseContinue" type="button">Entendi, continuar <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></footer></section>`;
  document.body.appendChild(backdrop);
