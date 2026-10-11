@@ -710,3 +710,56 @@ html.theme-transition *,html.theme-transition *::before,html.theme-transition *:
 .week-chart-member>i{width:7px;height:7px;border-radius:50%;flex:0 0 7px}
 .week-chart-member>span{overflow-wrap:anywhere}
 .week-point-comparison{vector-effect:non-scaling-stroke}
+
+
+/* Shape Together — refinamento visual dos gráficos de progressão */
+.week-line-history{stroke:var(--accent);stroke-width:3.2;opacity:.82}
+.week-line-comparison-user{fill:none;stroke-width:2.25;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;opacity:.72}
+.week-point-comparison{vector-effect:non-scaling-stroke;opacity:.86}
+.week-chart-members{display:flex;align-items:center;flex-wrap:wrap;gap:7px 13px;padding:10px 5px 3px;border-top:1px solid var(--line);margin-top:5px}
+.week-chart-member{display:inline-flex;align-items:center;gap:6px;min-width:0;color:var(--muted);font-size:10px;font-weight:800;max-width:100%}
+.week-chart-member>i{width:8px;height:8px;border-radius:50%;flex:0 0 8px;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 9%,transparent)}
+.week-chart-member>span{overflow-wrap:anywhere}
+.week-chart-member.is-primary{color:var(--text)}
+.week-point-comparison{filter:none}
+.map-box{grid-template-columns:minmax(0,1fr);align-content:center;gap:4px}
+.map-box svg{width:min(100%,560px);height:auto;display:block;overflow:visible;aspect-ratio:1/1}
+.map-box .map-axis-guide{stroke:currentColor;stroke-width:1;opacity:.12;vector-effect:non-scaling-stroke}
+.map-box .map-ring{stroke-width:1.1;vector-effect:non-scaling-stroke}
+.map-box .map-ring-10{stroke-width:1.6;opacity:.28}
+.map-box .map-date-label{font-size:10px;font-weight:750;paint-order:stroke;stroke:var(--panel);stroke-width:3px;stroke-linejoin:round}
+.map-box .map-status-dot{vector-effect:non-scaling-stroke}
+.map-chart-legend{display:flex;align-items:center;justify-content:center;gap:8px 15px;flex-wrap:wrap;width:100%;padding:7px 8px 0;color:var(--muted)}
+.map-chart-legend span{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:800;white-space:nowrap}
+.map-chart-legend i{display:inline-block;width:8px;height:8px;border-radius:50%;flex:0 0 8px}
+.map-chart-legend i.red{background:var(--danger)}
+.map-chart-legend i.blue{background:var(--rest)}
+.map-chart-legend i.orange{background:var(--warn)}
+.map-chart-legend i.green{background:var(--success)}
+.map-chart-legend p{width:100%;max-width:540px;margin:2px auto 0;text-align:center;font-size:10px;line-height:1.55;color:var(--muted)}
+@media(max-width:560px){
+  .week-chart-members{gap:8px 11px;padding:10px 3px 2px}
+  .week-chart-member{font-size:9px}
+  .map-box svg{width:100%;max-width:500px}
+  .map-chart-legend{gap:8px 10px;padding:6px 2px 0}
+  .map-chart-legend span{font-size:9px}
+  .map-chart-legend p{font-size:9px;padding:0 3px}
+}
+@media(prefers-reduced-motion:reduce){.map-line,.map-point{animation:none!important;stroke-dashoffset:0!important}}
+/* Radar de atributos — seis eixos com escala comum */
+.map-box .radar-scale-label{font-size:9px;font-weight:900;fill:var(--muted);paint-order:stroke;stroke:var(--panel);stroke-width:3px;stroke-linejoin:round}
+.map-box .radar-axis-label{font-size:10px;font-weight:850;fill:var(--text);paint-order:stroke;stroke:var(--panel);stroke-width:3.5px;stroke-linejoin:round}
+.map-box .radar-ring{vector-effect:non-scaling-stroke}
+.map-chart-legend.radar-chart-legend{gap:8px 14px;padding-top:10px}
+.radar-member-key{display:grid;grid-template-columns:9px auto;align-items:center;column-gap:7px;row-gap:2px;min-width:0;max-width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.radar-member-key>i{grid-row:1 / span 2;width:8px;height:27px;border-radius:5px;background:var(--member-color)}
+.radar-member-key>b{font-size:10px;color:var(--text);font-weight:900;overflow-wrap:anywhere}
+.radar-member-key>small{font-size:9px;color:var(--muted);font-weight:750}
+.map-chart-legend.radar-chart-legend>p{margin-top:5px;max-width:580px}
+@media(max-width:560px){
+  .map-box .radar-axis-label{font-size:9.5px}
+  .map-chart-legend.radar-chart-legend{gap:7px;padding-left:0;padding-right:0}
+  .radar-member-key{padding:6px 7px;max-width:48%}
+  .radar-member-key>b{font-size:9px}
+  .radar-member-key>small{font-size:8px}
+}
