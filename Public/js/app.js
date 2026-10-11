@@ -575,3 +575,272 @@ $('retryBoot').onclick=boot;
 installAccountActionSpacingFix();
 boot();
 })();
+/* Shape Together — revisão de gráficos de progressão e radar hexagonal.
+ * Carregar depois de /js/app.js. Reutiliza os dados e as regras já existentes.
+ */
+(function () {
+  'use strict';
+
+  // O gráfico temporal usa um único eixo de datas para todos os participantes.
+  // Assim, um ponto em uma data representa o mesmo dia em todas as séries.
+  window.drawWeekChart = function drawWeekChart(container, primaryId, otherIds) {
+    if (!container || typeof state === 'undefined' || !state) return;
+
+    const selectedIds = Array.from(new Set([
+      primaryId,
+      ...(Array.isArray(otherIds) ? otherIds : (typeof compareIds !== 'undefined' ? Array.from(compareIds) : []))
+    ].filter(Boolean)));
+    const members = selectedIds
+      .map(id => state.users.find(user => user.id === id))
+      .filter(Boolean);
+    const primary = members.find(user => user.id === primaryId) || current();
+    if (primary && !members.some(user => user.id === primary.id)) members.unshift(primary);
+
+    const allDates = challengeDates();
+    const relevantDates = allDates.filter(date => members.some(user => state.days[user.id]?.[date]?.status));
+    if (!relevantDates.length) {
+      container.innerHTML = '<div class="progress-empty"><strong>Ainda não há registros suficientes.</strong><span>Marque pelo menos um dia no calendário para ver a evolução. Na sala, as linhas dos participantes usam as mesmas datas e a mesma escala.</span></div>';
+      return;
+    }
+
+    const first = allDates.indexOf(relevantDates[0]);
+    const last = allDates.indexOf(relevantDates[relevantDates.length - 1]);
+    const dates = allDates.slice(first, last + 1);
+    const n = dates.length;
+    const W = Math.max(920, 78 + (n - 1) * 54);
+    const H = 356, ml = 50, mr = 28, mt = 38, mb = 76;
+    const plotW = W - ml - mr, plotH = H - mt - mb;
+    const x = i => n === 1 ? ml + plotW / 2 : ml + plotW * i / (n - 1);
+    const y = value => mt + plotH - (Math.max(0, Math.min(10, value)) / 10) * plotH;
+    const todayDate = today();
+    const weekStart = new Date(todayDate + 'T00:00:00');
+    weekStart.setDate(weekStart.getDate() - 6);
+    const weekStartDate = iso(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate());
+    const inCurrentWeek = date => date >= weekStartDate && date <= todayDate;
+    const statusColor = { red: 'var(--danger)', blue: 'var(--rest)', orange: 'var(--warn)', green: 'var(--success)' };
+
+    const series = members.map((user, index) => ({
+      user,
+      primary: user.id === primaryId,
+      color: memberColor(user, state.users.findIndex(candidate => candidate.id === user.id)),
+      points: dates.map((date, i) => {
+        const status = state.days[user.id]?.[date]?.status || null;
+        return { date, index: i, status, registered: Boolean(status), value: status ? STATUS[status].value : null };
+      })
+    }));
+
+    let grid = '', labels = '', historySegments = '', weekSegments = '', comparisonSegments = '', pointsSvg = '';
+    [0, 3, 6, 10].forEach(value => {
+      const yy = y(value);
+      grid += `<line x1="${ml}" y1="${yy}" x2="${W - mr}" y2="${yy}" class="week-grid"/><text x="${ml - 11}" y="${yy + 4}" text-anchor="end" class="week-y">${value}</text>`;
+    });
+
+    const weekIndexes = dates.map((date, i) => inCurrentWeek(date) ? i : null).filter(i => i !== null);
+    if (weekIndexes.length) {
+      const firstWeek = weekIndexes[0], lastWeek = weekIndexes[weekIndexes.length - 1];
+      const step = n === 1 ? 0 : plotW / (n - 1);
+      const bandX = n === 1 ? ml - 22 : Math.max(ml, x(firstWeek) - step / 2);
+      const bandRight = n === 1 ? ml + 22 : Math.min(W - mr, x(lastWeek) + step / 2);
+      grid += `<rect x="${bandX}" y="${mt}" width="${Math.max(0, bandRight - bandX)}" height="${plotH}" rx="14" class="week-focus-band"/><text x="${bandX + 10}" y="${mt - 11}" class="week-week-label">ÚLTIMOS 7 DIAS</text>`;
+    }
+
+    function pathFor(points) {
+      return points.map((point, index) => `${index ? 'L' : 'M'}${x(point.index)},${y(point.value)}`).join(' ');
+    }
+    function appendRuns(memberSeries, kind) {
+      let run = [];
+      const flush = () => {
+        if (run.length > 1) {
+          const d = pathFor(run);
+          if (kind === 'primary') historySegments += `<path d="${d}" class="week-line-history"/>`;
+          else comparisonSegments += `<path d="${d}" class="week-line-comparison-user" stroke="${memberSeries.color}"/>`;
+        }
+        run = [];
+      };
+      memberSeries.points.forEach(point => {
+        if (!point.registered) { flush(); return; }
+        run.push(point);
+      });
+      flush();
+    }
+
+    // Comparações vão atrás da série principal para ela continuar legível.
+    series.filter(s => !s.primary).forEach(s => appendRuns(s, 'comparison'));
+    const mainSeries = series.find(s => s.primary);
+    if (mainSeries) {
+      appendRuns(mainSeries, 'primary');
+      let run = [];
+      const flushWeek = () => {
+        if (run.length > 1) weekSegments += `<path d="${pathFor(run)}" class="week-line-week"/>`;
+        run = [];
+      };
+      mainSeries.points.forEach(point => {
+        if (!point.registered || !inCurrentWeek(point.date)) { flushWeek(); return; }
+        run.push(point);
+      });
+      flushWeek();
+    }
+
+    series.filter(s => !s.primary).concat(series.filter(s => s.primary)).forEach(memberSeries => {
+      memberSeries.points.forEach(point => {
+        if (!point.registered) return;
+        const active = point.date === todayDate;
+        const dateLabel = point.date.split('-').reverse().join('/');
+        const color = statusColor[point.status] || 'var(--line2)';
+        const radius = memberSeries.primary ? 6.2 : 4.2;
+        const strokeWidth = memberSeries.primary ? 2.8 : 1.7;
+        pointsSvg += `<circle cx="${x(point.index)}" cy="${y(point.value)}" r="${radius}" fill="var(--panel)" stroke="${color}" stroke-width="${strokeWidth}" class="${memberSeries.primary ? 'week-point' : 'week-point-comparison'}"><title>${esc(memberSeries.user.name)} · ${dateLabel} · ${esc(STATUS[point.status].label)} · ${point.value}/10</title></circle>`;
+        if (memberSeries.primary) pointsSvg += `<circle cx="${x(point.index)}" cy="${y(point.value)}" r="2.2" fill="${color}" class="week-point-core" aria-hidden="true"/>`;
+      });
+    });
+
+    dates.forEach((date, i) => {
+      const active = date === todayDate, xx = x(i);
+      if (active) labels += `<line x1="${xx}" y1="${mt}" x2="${xx}" y2="${mt + plotH}" class="week-today-line"/>`;
+      const dt = new Date(date + 'T00:00:00');
+      const dow = dt.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '').slice(0, 3);
+      labels += `<text x="${xx}" y="${H - 31}" text-anchor="middle" class="week-x ${active ? 'active' : ''}">${dow}</text><text x="${xx}" y="${H - 13}" text-anchor="middle" class="week-date ${active ? 'active' : ''}">${dt.getDate()}</text>`;
+    });
+
+    const legend = series.map(memberSeries => `<span class="week-chart-member ${memberSeries.primary ? 'is-primary' : ''}"><i style="background:${memberSeries.primary ? 'var(--accent)' : memberSeries.color}"></i><span>${esc(memberSeries.user.name)}${memberSeries.primary ? ' · você' : ''}</span></span>`).join('');
+    container.style.overflowX = 'auto';
+    container.style.overflowY = 'hidden';
+    container.innerHTML = `<div class="progress-chart-meta"><span>${dates.length} dia${dates.length === 1 ? '' : 's'} no intervalo</span><span>Escala comum: 0–10 · verde destaca sua semana</span></div><svg class="week-chart-svg week-chart-full" viewBox="0 0 ${W} ${H}" style="width:${W}px;min-width:${W}px;height:auto" role="img" aria-label="Histórico diário comparável entre os participantes selecionados. Todos usam as mesmas datas e a escala de zero a dez."><defs><filter id="weekPointGlowHistory"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>${grid}${comparisonSegments}${historySegments}${weekSegments}${labels}${pointsSvg}</svg><div class="week-chart-members" aria-label="Legenda dos participantes">${legend}</div>`;
+  };
+
+  // O mapa passa a ser um radar de seis dimensões comparáveis, como os usados
+  // em jogos: cada eixo tem a mesma escala percentual, do centro (0) à borda (100).
+  const originalMap = window.drawMap;
+  window.drawMap = function drawMap(container, primaryId, otherIds) {
+    const size = 620, c = 310, R = 210;
+    const selected = (Array.isArray(otherIds) ? otherIds : (typeof compareIds !== 'undefined' ? Array.from(compareIds) : []));
+    const names = ['Consistência', 'Treinos bons', 'Treino mediano', 'Descanso', 'Não treinou', 'Pontuação média'];
+    const angles = names.map((_, index) => -Math.PI / 2 + index * Math.PI / 3);
+    const axes = [
+      'Consistência', 'Treinos bons', 'Treino mediano', 'Descanso', 'Não treinou', 'Pontuação média'
+    ];
+    const dates = challengeDates();
+    const elapsed = Math.max(1, dates.length);
+    const ringLevels = [20, 40, 60, 80, 100];
+
+    const metrics = userId => {
+      const days = state.days[userId] || {};
+      const counts = { red: 0, blue: 0, orange: 0, green: 0 };
+      let registered = 0;
+      dates.forEach(date => {
+        const status = days[date]?.status;
+        if (status && Object.prototype.hasOwnProperty.call(counts, status)) {
+          counts[status] += 1;
+          registered += 1;
+        }
+      });
+      const pct = count => Math.round(count / elapsed * 100);
+      return {
+        values: [
+          Math.round(registered / elapsed * 100),
+          pct(counts.green), pct(counts.orange), pct(counts.blue), pct(counts.red),
+          progress(userId).score
+        ],
+        registered,
+        counts
+      };
+    };
+    const pointAt = (value, angle) => {
+      const radius = R * Math.max(0, Math.min(100, value)) / 100;
+      return { x: c + radius * Math.cos(angle), y: c + radius * Math.sin(angle) };
+    };
+    const polygonPoints = (values, radiusScale = 1) => values.map((value, index) => {
+      const p = pointAt(value * radiusScale, angles[index]);
+      return `${p.x.toFixed(2)},${p.y.toFixed(2)}`;
+    }).join(' ');
+    const gridPoints = scale => angles.map(angle => `${(c + R * scale * Math.cos(angle)).toFixed(2)},${(c + R * scale * Math.sin(angle)).toFixed(2)}`).join(' ');
+
+    let s = `<svg viewBox="0 0 ${size} ${size}" role="img" aria-label="Gráfico de radar hexagonal com seis dimensões de desempenho, em escala de zero a cem por cento."><defs><linearGradient id="primaryFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--accent)" stop-opacity=".27"/><stop offset="100%" stop-color="var(--accent)" stop-opacity=".06"/></linearGradient><filter id="radarGlow"><feGaussianBlur stdDeviation="3.5"/></filter></defs>`;
+
+    // Anéis concêntricos regulares: todos ficam dentro da moldura do radar.
+    ringLevels.forEach(level => {
+      s += `<polygon class="map-ring radar-ring" points="${gridPoints(level / 100)}" fill="none" stroke="currentColor" opacity="${level === 100 ? .27 : .13}"/>`;
+      const labelY = c - R * level / 100 + 4;
+      s += `<text x="${c + 7}" y="${labelY}" class="radar-label radar-scale-label">${level}</text>`;
+    });
+
+    // Seis guias terminam exatamente nos vértices do hexágono externo.
+    angles.forEach(angle => {
+      const p = pointAt(100, angle);
+      s += `<line x1="${c}" y1="${c}" x2="${p.x}" y2="${p.y}" class="map-axis-guide"/>`;
+    });
+
+    // Rótulos posicionados fora do contorno, com espaço próprio para telas menores.
+    axes.forEach((label, index) => {
+      const angle = angles[index], radius = R + 37;
+      const x = c + radius * Math.cos(angle), y = c + radius * Math.sin(angle) + 3;
+      const anchor = Math.cos(angle) > .35 ? 'start' : Math.cos(angle) < -.35 ? 'end' : 'middle';
+      s += `<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" text-anchor="${anchor}" class="radar-label radar-axis-label">${esc(label)}</text>`;
+    });
+
+    const visibleUsers = (state.users || []).filter(user => user.id === primaryId || (user.id !== primaryId && selected.includes(user.id)));
+    const comparisonUsers = visibleUsers.filter(user => user.id !== primaryId);
+    const primary = visibleUsers.find(user => user.id === primaryId) || state.users.find(user => user.id === primaryId) || current();
+    const orderedUsers = [...comparisonUsers, ...(primary ? [primary] : [])];
+
+    orderedUsers.forEach(user => {
+      const isPrimary = user.id === primaryId;
+      const userIndex = state.users.findIndex(candidate => candidate.id === user.id);
+      const color = isPrimary ? 'var(--accent)' : memberColor(user, userIndex);
+      const data = metrics(user.id);
+      const pts = polygonPoints(data.values);
+      // Não há preenchimento com aparência de nota quando ainda não há registros.
+      if (data.registered > 0) {
+        if (isPrimary) s += `<polygon points="${pts}" fill="url(#primaryFill)" stroke="none"/>`;
+        s += `<polygon points="${pts}" fill="none" stroke="${color}" stroke-width="${isPrimary ? 3.4 : 2.2}" stroke-linejoin="round" ${isPrimary ? '' : 'stroke-dasharray="5 5"'} opacity="${isPrimary ? .98 : .82}" vector-effect="non-scaling-stroke"><title>${esc(user.name)} · ${data.registered} dias registrados</title></polygon>`;
+        data.values.forEach((value, index) => {
+          const point = pointAt(value, angles[index]);
+          if (value > 0) s += `<circle cx="${point.x}" cy="${point.y}" r="${isPrimary ? 4.2 : 3.2}" fill="${color}" stroke="var(--panel)" stroke-width="1.5" vector-effect="non-scaling-stroke"><title>${esc(user.name)} · ${axes[index]}: ${value}%</title></circle>`;
+        });
+      }
+    });
+    s += '</svg>';
+
+    const legend = orderedUsers.map(user => {
+      const isPrimary = user.id === primaryId;
+      const userIndex = state.users.findIndex(candidate => candidate.id === user.id);
+      const color = isPrimary ? 'var(--accent)' : memberColor(user, userIndex);
+      const data = metrics(user.id);
+      return `<span class="radar-member-key"><i style="--member-color:${color}"></i><b>${esc(user.name)}${isPrimary ? ' · você' : ''}</b><small>${data.registered} dias · média ${data.values[5]}/100</small></span>`;
+    }).join('');
+    container.innerHTML = s + `<div class="map-chart-legend radar-chart-legend">${legend}<p><b>Como ler:</b> cada eixo representa uma dimensão; quanto mais longe do centro, maior o valor. Consistência e categorias usam os dias decorridos do desafio; pontuação média considera os registros existentes. Dias sem registro não são classificados automaticamente como “não treinou”.</p></div>`;
+  };
+
+  // Mantém o título e a descrição coerentes com o novo gráfico de atributos.
+  function updateRadarCopy() {
+    const box = document.querySelector('.map-box-head');
+    const title = box && box.querySelector('b');
+    const description = box && box.querySelector('small');
+    if (title) title.textContent = 'Radar de desempenho · seis dimensões';
+    if (description) description.textContent = 'Compare consistência, distribuição dos registros e pontuação média. No modo sala, as pessoas selecionadas aparecem no mesmo radar, com a mesma escala.';
+  }
+  const appRender = window.renderApp;
+  if (typeof appRender === 'function' && !window.__radarUxRenderWrapped) {
+    window.renderApp = function () {
+      const result = appRender.apply(this, arguments);
+      updateRadarCopy();
+      return result;
+    };
+    window.__radarUxRenderWrapped = true;
+  }
+
+  // O filtro de participantes passa a atualizar os dois gráficos, não só o mapa.
+  document.addEventListener('change', event => {
+    const target = event.target;
+    if (!target || !target.matches || !target.matches('[data-compare]')) return;
+    if (typeof compareIds !== 'undefined' && typeof current === 'function') {
+      const me = current();
+      const chart = document.getElementById('weekChart');
+      if (me && chart) window.drawWeekChart(chart, me.id, Array.from(compareIds));
+    }
+  });
+
+  // Caso o estado local já tenha sido carregado antes deste patch, redesenha com
+  // as novas funções. Em carregamento online, renderApp seguirá usando-as também.
+  try { if (typeof state !== 'undefined' && state && typeof renderApp === 'function') renderApp(); } catch (error) { console.warn('[Shape Together] Gráficos atualizados; renderização inicial mantida.', error); }
+})();
