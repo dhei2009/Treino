@@ -11,6 +11,7 @@ import {
   SESSION_MAX_AGE_SECONDS,
   sessionCookieHeader
 } from './session-cookie.js';
+import { validatePlannerRange, validatePlannerTaskInput } from './planner-validation.js';
 
 const PORT = 3000;
 const AVATAR_BUCKET = 'avatars';
@@ -28,6 +29,8 @@ const REQUIRED_TABLES = [
   'group_members',
   'group_invites',
   'day_records',
+  'group_day_records',
+  'planner_tasks',
   'user_preferences'
 ];
 
@@ -206,7 +209,26 @@ function cleanHex(value, fallback = '#11120F') {
 
 function safeDate(value) {
   const s = String(value || '');
-  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const [year, month, day] = s.split('-').map(Number);
+  const d = new Date(Date.UTC(year, month - 1, day));
+  return d.getUTCFullYear() === year && d.getUTCMonth() === month - 1 && d.getUTCDate() === day ? s : null;
+}
+
+function todayInAppTimezone() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Fortaleza', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(new Date());
+  const part = (type) => parts.find((p) => p.type === type)?.value || '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+function validateRecordDate(date, group = null) {
+  const start = safeDate(group?.challenge_start) || challengeStart;
+  const end = safeDate(group?.challenge_end) || challengeEnd;
+  if (date < start || date > end) return 'A data está fora do período deste desafio.';
+  if (date > todayInAppTimezone()) return 'Não é possível registrar um dia futuro.';
+  return null;
 }
 
 function publicAvatarUrl(pathValue) {
@@ -285,9 +307,8 @@ async function deleteAvatarFiles(appUserId) {
     `${appUserId}/original.png`,
     `${appUserId}/original.webp`
   ];
-  try {
-    await supabase.storage.from(AVATAR_BUCKET).remove(paths);
-  } catch {}
+  const { error } = await supabase.storage.from(AVATAR_BUCKET).remove(paths);
+  if (error) throw error;
 }
 
 async function getUserById(id) {
@@ -460,11 +481,15 @@ async function loadStateForUser(userId, workspaceMode = 'auto', requestedGroupId
 
   const prefMap = new Map((prefRows || []).map((p) => [p.user_id, p]));
 
-  const { data: records, error: dayErr } = await supabase
-    .from('day_records')
-    .select('user_id, day, status, note, updated_at')
-    .in('user_id', ids)
-    .order('day', { ascending: true });
+  const recordsQuery = group
+    ? supabase.from('group_day_records')
+        .select('group_id, user_id, day, status, note, updated_at')
+        .eq('group_id', group.id)
+        .in('user_id', ids)
+    : supabase.from('day_records')
+        .select('user_id, day, status, note, updated_at')
+        .eq('user_id', userId);
+  const { data: records, error: dayErr } = await recordsQuery.order('day', { ascending: true });
   if (dayErr) throw dayErr;
 
   const dayMap = {};
@@ -659,16 +684,26 @@ function appOrigin(req) {
 }
 
 const databaseRoutes =
-  /^\/api\/(?:health|session|auth\/google-session|login|logout|state|day(?:\/[^/]+)?|settings(?:\/workspace-default)?|account(?:\/delete)?|workspace|groups|invite|group(?:\/join)?|levels)$/;
+  /^\/api\/(?:health|session|auth\/google-session|login|logout|state|day(?:\/[^/]+)?|tasks(?:\/[^/]+)?|settings(?:\/workspace-default)?|account(?:\/delete)?|workspace|groups(?:\/public)?|invite|group(?:\/(?:join|join-public))?|levels)$/;
 
 const app = express();
 app.set('trust proxy', 1);
+app.disable('x-powered-by');
 app.use((req, _res, next) => {
   if (
     req.url === '/shape-together-api' ||
     req.url.startsWith('/shape-together-api/')
   ) {
     req.url = req.url.replace(/^\/shape-together-api/, '/api');
+  }
+  next();
+});
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   }
   next();
 });
@@ -1052,6 +1087,47 @@ app.delete('/api/account', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Entre novamente com Google para excluir esta conta.' });
     }
 
+    // Transfer groups created/owned by this account before its membership cascades.
+    const { data: createdGroups, error: createdGroupsError } = await supabase
+      .from('groups').select('id').eq('created_by', req.userId);
+    if (createdGroupsError) throw createdGroupsError;
+    const { data: ownedMemberships, error: ownedMembershipsError } = await supabase
+      .from('group_members').select('group_id').eq('user_id', req.userId).eq('role', 'owner');
+    if (ownedMembershipsError) throw ownedMembershipsError;
+    const ownedGroupIds = new Set([
+      ...(createdGroups || []).map((group) => group.id),
+      ...(ownedMemberships || []).map((membership) => membership.group_id)
+    ]);
+    for (const groupId of ownedGroupIds) {
+      const { data: remaining, error: remainingError } = await supabase
+        .from('group_members').select('user_id, joined_at')
+        .eq('group_id', groupId).neq('user_id', req.userId)
+        .order('joined_at', { ascending: true }).limit(1);
+      if (remainingError) throw remainingError;
+      if (remaining?.[0]) {
+        const newOwnerId = remaining[0].user_id;
+        const { error: promoteError } = await supabase.from('group_members')
+          .update({ role: 'owner' }).eq('group_id', groupId).eq('user_id', newOwnerId);
+        if (promoteError) throw promoteError;
+        const { error: creatorTransferError } = await supabase.from('groups')
+          .update({ created_by: newOwnerId }).eq('id', groupId);
+        if (creatorTransferError) throw creatorTransferError;
+      } else {
+        const { error: deleteEmptyGroupError } = await supabase.from('groups').delete().eq('id', groupId);
+        if (deleteEmptyGroupError) throw deleteEmptyGroupError;
+      }
+    }
+
+    // Planner tasks are cleaned up without deleting the tasks shared with surviving rooms.
+    // Personal tasks are removed; shared tasks lose only their creator reference and remain in the room.
+    const { error: personalPlannerCleanupError } = await supabase
+      .from('planner_tasks').delete().eq('owner_id', req.userId).is('workspace_group_id', null);
+    if (personalPlannerCleanupError) throw personalPlannerCleanupError;
+    const { error: sharedPlannerOwnerError } = await supabase
+      .from('planner_tasks').update({ owner_id: null }).eq('owner_id', req.userId)
+      .not('workspace_group_id', 'is', null);
+    if (sharedPlannerOwnerError) throw sharedPlannerOwnerError;
+
     await deleteAvatarFiles(req.userId);
 
     if (user.auth_user_id) {
@@ -1075,8 +1151,10 @@ app.delete('/api/account', requireAuth, async (req, res) => {
 
 app.get('/api/state', requireAuth, async (req, res) => {
   try {
+    const mode = ['group', 'personal'].includes(String(req.query.mode || '')) ? String(req.query.mode) : 'auto';
+    const groupId = mode === 'group' ? String(req.query.groupId || '') : null;
     res.json({
-      state: await loadStateForUser(req.userId),
+      state: await loadStateForUser(req.userId, mode, groupId),
       me: publicUser(
         await getUserById(req.userId),
         await getPrefs(req.userId)
@@ -1084,62 +1162,234 @@ app.get('/api/state', requireAuth, async (req, res) => {
     });
   } catch (e) {
     console.error('State load failed:', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: e.code === 'NO_GROUP' ? e.message : 'Não foi possível carregar os dados. Tente novamente.' });
   }
 });
 
-app.post('/api/day', requireAuth, async (req, res) => {
-  const date = safeDate(req.body.date);
-  const status = String(req.body.status || '');
-  const note = String(req.body.note || '').trim().slice(0, 500);
+const PLANNER_TASK_COLUMNS = 'id, owner_id, workspace_group_id, title, details, due_date, priority, status, category, created_at, updated_at';
 
-  if (!date) return res.status(400).json({ error: 'Data inválida.' });
-  if (!VALID_STATUS.has(status)) {
-    return res.status(400).json({ error: 'Status inválido.' });
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
+}
+
+function serializePlannerTask(row, canManage = false) {
+  return {
+    id: row.id,
+    ownerId: row.owner_id || null,
+    workspaceGroupId: row.workspace_group_id || null,
+    title: row.title,
+    details: row.details || '',
+    dueDate: row.due_date || null,
+    priority: row.priority,
+    status: row.status,
+    category: row.category,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    canManage: Boolean(canManage)
+  };
+}
+
+async function plannerTaskAccess(task, userId) {
+  if (!task.workspace_group_id) {
+    const isOwner = task.owner_id === userId;
+    return { canRead: isOwner, canManage: isOwner };
+  }
+  const group = await groupForUser(userId, task.workspace_group_id);
+  if (!group) return { canRead: false, canManage: false };
+  const supabase = requireSupabase();
+  const { data: membership, error } = await supabase.from('group_members')
+    .select('role').eq('group_id', task.workspace_group_id).eq('user_id', userId).maybeSingle();
+  if (error) throw error;
+  if (!membership) return { canRead: false, canManage: false };
+  return {
+    canRead: true,
+    canManage: task.owner_id === userId || ['owner', 'admin'].includes(membership.role)
+  };
+}
+
+app.get('/api/tasks', requireAuth, async (req, res) => {
+  const range = validatePlannerRange(req.query.from, req.query.to);
+  if (range.error) return res.status(400).json({ error: range.error });
+  const groupMode = String(req.query.workspaceMode || 'personal') === 'group';
+  const requestedGroupId = String(req.query.groupId || '');
+  if (groupMode && !isUuid(requestedGroupId)) {
+    return res.status(400).json({ error: 'Selecione uma sala válida para ver as tarefas.' });
   }
 
   try {
     const supabase = requireSupabase();
-    const { error } = await supabase.from('day_records').upsert(
-      {
-        user_id: req.userId,
-        day: date,
-        status,
-        note,
-        updated_at: new Date().toISOString()
-      },
-      { onConflict: 'user_id,day' }
-    );
+    let query = supabase.from('planner_tasks').select(PLANNER_TASK_COLUMNS)
+      .order('due_date', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: false }).limit(500);
+    let canManageAll = true;
+    if (groupMode) {
+      const group = await groupForUser(req.userId, requestedGroupId);
+      if (!group) return res.status(403).json({ error: 'Você não participa desta sala.' });
+      const { data: membership, error: membershipError } = await supabase.from('group_members')
+        .select('role').eq('group_id', group.id).eq('user_id', req.userId).maybeSingle();
+      if (membershipError) throw membershipError;
+      if (!membership) return res.status(403).json({ error: 'Você não participa desta sala.' });
+      canManageAll = ['owner', 'admin'].includes(membership.role);
+      query = query.eq('workspace_group_id', group.id);
+    } else {
+      query = query.eq('owner_id', req.userId).is('workspace_group_id', null);
+    }
+    if (range.from && range.to) {
+      query = query.or(`due_date.is.null,and(due_date.gte.${range.from},due_date.lte.${range.to})`);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    const tasks = (data || []).map((row) => serializePlannerTask(
+      row,
+      groupMode ? (row.owner_id === req.userId || canManageAll) : row.owner_id === req.userId
+    ));
+    return res.json({ tasks, currentUserId: req.userId });
+  } catch (error) {
+    console.error('Planner tasks load failed:', error);
+    return res.status(500).json({ error: 'Não foi possível carregar as tarefas. Confira a migração do Planejador e tente novamente.' });
+  }
+});
+
+app.post('/api/tasks', requireAuth, async (req, res) => {
+  const parsed = validatePlannerTaskInput(req.body);
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
+  const groupMode = req.body?.workspaceMode === 'group';
+  const requestedGroupId = String(req.body?.groupId || '');
+  if (groupMode && !isUuid(requestedGroupId)) {
+    return res.status(400).json({ error: 'Selecione uma sala válida para compartilhar a tarefa.' });
+  }
+  try {
+    const supabase = requireSupabase();
+    let groupId = null;
+    if (groupMode) {
+      const group = await groupForUser(req.userId, requestedGroupId);
+      if (!group) return res.status(403).json({ error: 'Você não participa desta sala.' });
+      groupId = group.id;
+    }
+    const { data, error } = await supabase.from('planner_tasks').insert({
+      owner_id: req.userId,
+      workspace_group_id: groupId,
+      ...parsed.value
+    }).select(PLANNER_TASK_COLUMNS).single();
+    if (error) throw error;
+    return res.status(201).json({ task: serializePlannerTask(data, true) });
+  } catch (error) {
+    console.error('Planner task create failed:', error);
+    return res.status(500).json({ error: 'Não foi possível salvar a tarefa. Tente novamente.' });
+  }
+});
+
+app.patch('/api/tasks/:taskId', requireAuth, async (req, res) => {
+  const taskId = String(req.params.taskId || '');
+  if (!isUuid(taskId)) return res.status(400).json({ error: 'Identificador de tarefa inválido.' });
+  const parsed = validatePlannerTaskInput(req.body, { partial: true });
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
+  try {
+    const supabase = requireSupabase();
+    const { data: existing, error: loadError } = await supabase.from('planner_tasks')
+      .select(PLANNER_TASK_COLUMNS).eq('id', taskId).maybeSingle();
+    if (loadError) throw loadError;
+    if (!existing) return res.status(404).json({ error: 'Tarefa não encontrada.' });
+    const access = await plannerTaskAccess(existing, req.userId);
+    if (!access.canRead) return res.status(403).json({ error: 'Você não tem acesso a esta tarefa.' });
+    if (!access.canManage) return res.status(403).json({ error: 'Somente quem criou a tarefa ou um administrador da sala pode alterá-la.' });
+    const { data, error } = await supabase.from('planner_tasks').update(parsed.value)
+      .eq('id', taskId).select(PLANNER_TASK_COLUMNS).single();
+    if (error) throw error;
+    return res.json({ task: serializePlannerTask(data, true) });
+  } catch (error) {
+    console.error('Planner task update failed:', error);
+    return res.status(500).json({ error: 'Não foi possível atualizar a tarefa. Tente novamente.' });
+  }
+});
+
+app.delete('/api/tasks/:taskId', requireAuth, async (req, res) => {
+  const taskId = String(req.params.taskId || '');
+  if (!isUuid(taskId)) return res.status(400).json({ error: 'Identificador de tarefa inválido.' });
+  try {
+    const supabase = requireSupabase();
+    const { data: existing, error: loadError } = await supabase.from('planner_tasks')
+      .select(PLANNER_TASK_COLUMNS).eq('id', taskId).maybeSingle();
+    if (loadError) throw loadError;
+    if (!existing) return res.status(404).json({ error: 'Tarefa não encontrada.' });
+    const access = await plannerTaskAccess(existing, req.userId);
+    if (!access.canRead) return res.status(403).json({ error: 'Você não tem acesso a esta tarefa.' });
+    if (!access.canManage) return res.status(403).json({ error: 'Somente quem criou a tarefa ou um administrador da sala pode excluí-la.' });
+    const { error } = await supabase.from('planner_tasks').delete().eq('id', taskId);
+    if (error) throw error;
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error('Planner task delete failed:', error);
+    return res.status(500).json({ error: 'Não foi possível excluir a tarefa. Tente novamente.' });
+  }
+});
+
+app.post('/api/day', requireAuth, async (req, res) => {
+  const date = safeDate(req.body?.date);
+  const status = String(req.body?.status || '');
+  const note = String(req.body?.note || '').trim().slice(0, 500);
+  const mode = req.body?.workspaceMode === 'group' ? 'group' : 'personal';
+
+  if (!date) return res.status(400).json({ error: 'Data inválida.' });
+  if (!VALID_STATUS.has(status)) return res.status(400).json({ error: 'Status inválido.' });
+
+  try {
+    const supabase = requireSupabase();
+    let group = null;
+    if (mode === 'group') {
+      group = await groupForUser(req.userId, req.body?.groupId);
+      if (!group) return res.status(403).json({ error: 'Você não participa desta sala.' });
+    }
+    const dateError = validateRecordDate(date, group);
+    if (dateError) return res.status(400).json({ error: dateError });
+
+    const record = {
+      user_id: req.userId,
+      day: date,
+      status,
+      note,
+      updated_at: new Date().toISOString()
+    };
+    const query = mode === 'group'
+      ? supabase.from('group_day_records').upsert({ ...record, group_id: group.id }, { onConflict: 'group_id,user_id,day' })
+      : supabase.from('day_records').upsert(record, { onConflict: 'user_id,day' });
+    const { error } = await query;
     if (error) throw error;
 
-    const gid = await groupIdForUser(req.userId);
-    await broadcastGroup(gid);
-    res.json({ ok: true, state: await loadStateForUser(req.userId) });
+    await broadcastGroup(group?.id || null);
+    res.json({ ok: true, state: await loadStateForUser(req.userId, mode, group?.id || null) });
   } catch (e) {
     console.error('Day save failed:', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Não foi possível salvar o registro. Tente novamente.' });
   }
 });
 
 app.delete('/api/day/:date', requireAuth, async (req, res) => {
   const date = safeDate(req.params.date);
+  const mode = req.query.workspaceMode === 'group' ? 'group' : 'personal';
   if (!date) return res.status(400).json({ error: 'Data inválida.' });
 
   try {
     const supabase = requireSupabase();
-    const { error } = await supabase
-      .from('day_records')
-      .delete()
-      .eq('user_id', req.userId)
-      .eq('day', date);
+    let group = null;
+    if (mode === 'group') {
+      group = await groupForUser(req.userId, req.query.groupId);
+      if (!group) return res.status(403).json({ error: 'Você não participa desta sala.' });
+    }
+    const dateError = validateRecordDate(date, group);
+    if (dateError) return res.status(400).json({ error: dateError });
+
+    const query = mode === 'group'
+      ? supabase.from('group_day_records').delete().eq('group_id', group.id).eq('user_id', req.userId).eq('day', date)
+      : supabase.from('day_records').delete().eq('user_id', req.userId).eq('day', date);
+    const { error } = await query;
     if (error) throw error;
 
-    const gid = await groupIdForUser(req.userId);
-    await broadcastGroup(gid);
-    res.json({ ok: true, state: await loadStateForUser(req.userId) });
+    await broadcastGroup(group?.id || null);
+    res.json({ ok: true, state: await loadStateForUser(req.userId, mode, group?.id || null) });
   } catch (e) {
     console.error('Day delete failed:', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Não foi possível apagar o registro. Tente novamente.' });
   }
 });
 
@@ -1273,6 +1523,73 @@ app.get('/api/groups', requireAuth, async (req, res) => {
   }
 });
 
+app.get('/api/groups/public', requireAuth, async (req, res) => {
+  try {
+    const supabase = requireSupabase();
+    const { data: groups, error: groupsError } = await supabase
+      .from('groups')
+      .select('id, name, challenge_start, challenge_end, created_at')
+      .eq('visibility', 'public')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (groupsError) throw groupsError;
+    const ids = (groups || []).map((g) => g.id);
+    if (!ids.length) return res.json({ groups: [] });
+
+    const { data: members, error: membersError } = await supabase
+      .from('group_members')
+      .select('group_id, user_id')
+      .in('group_id', ids);
+    if (membersError) throw membersError;
+    const counts = new Map();
+    const joined = new Set();
+    for (const m of members || []) {
+      counts.set(m.group_id, (counts.get(m.group_id) || 0) + 1);
+      if (m.user_id === req.userId) joined.add(m.group_id);
+    }
+    res.json({ groups: (groups || []).map((g) => ({
+      id: g.id, name: g.name, memberCount: counts.get(g.id) || 0,
+      isMember: joined.has(g.id), challengeStart: g.challenge_start, challengeEnd: g.challenge_end
+    })) });
+  } catch (e) {
+    console.error('Public groups load failed:', e);
+    res.status(500).json({ error: 'Não foi possível carregar as salas públicas.' });
+  }
+});
+
+app.post('/api/group/join-public', requireAuth, async (req, res) => {
+  try {
+    const supabase = requireSupabase();
+    const groupId = String(req.body?.groupId || '').trim();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(groupId)) {
+      return res.status(400).json({ error: 'Sala inválida.' });
+    }
+    const { data: group, error: groupError } = await supabase
+      .from('groups').select('*').eq('id', groupId).eq('visibility', 'public').maybeSingle();
+    if (groupError) throw groupError;
+    if (!group) return res.status(404).json({ error: 'Sala pública não encontrada.' });
+
+    const { data: existing, error: memberCheckError } = await supabase
+      .from('group_members').select('role').eq('group_id', group.id).eq('user_id', req.userId).maybeSingle();
+    if (memberCheckError) throw memberCheckError;
+    if (!existing) {
+      const { error: insertError } = await supabase.from('group_members').insert({
+        group_id: group.id, user_id: req.userId, role: 'member'
+      });
+      if (insertError && insertError.code !== '23505') throw insertError;
+    }
+    const { error: updateError } = await supabase.from('app_users').update({ active_group_id: group.id }).eq('id', req.userId);
+    if (updateError) throw updateError;
+
+    const state = await loadStateForUser(req.userId, 'group', group.id);
+    await broadcastGroup(group.id);
+    res.json({ ok: true, group, state, me: publicUser(await getUserById(req.userId), await getPrefs(req.userId)) });
+  } catch (e) {
+    console.error('Public group join failed:', e);
+    res.status(500).json({ error: 'Não foi possível entrar na sala pública.' });
+  }
+});
+
 app.post('/api/invite', requireAuth, async (req, res) => {
   try {
     const group = await activeGroupForUser(req.userId);
@@ -1294,6 +1611,7 @@ app.post('/api/invite', requireAuth, async (req, res) => {
 });
 
 app.post('/api/group', requireAuth, async (req, res) => {
+  let createdGroupId = null;
   try {
     const supabase = requireSupabase();
     const name = String(req.body.name || 'Shape Together').trim().slice(0, 60) || 'Shape Together';
@@ -1309,6 +1627,7 @@ app.post('/api/group', requireAuth, async (req, res) => {
       challenge_end: challengeEnd
     }).select('*').single();
     if (error) throw error;
+    createdGroupId = group.id;
 
     const { error: memberErr } = await supabase.from('group_members').insert({ group_id: group.id, user_id: req.userId, role: 'owner' });
     if (memberErr) throw memberErr;
@@ -1319,7 +1638,16 @@ app.post('/api/group', requireAuth, async (req, res) => {
     res.json({ ok: true, group, state: await loadStateForUser(req.userId, 'group', group.id), me: publicUser(await getUserById(req.userId), await getPrefs(req.userId)) });
   } catch (e) {
     console.error('Group creation failed:', e);
-    res.status(500).json({ error: e.message });
+    if (createdGroupId) {
+      try {
+        const supabase = requireSupabase();
+        const { error: cleanupError } = await supabase.from('groups').delete().eq('id', createdGroupId);
+        if (cleanupError) console.error('Partial group cleanup failed:', cleanupError);
+      } catch (cleanupError) {
+        console.error('Partial group cleanup failed:', cleanupError);
+      }
+    }
+    res.status(500).json({ error: 'Não foi possível criar a sala. Tente novamente.' });
   }
 });
 
@@ -1333,8 +1661,13 @@ app.post('/api/group/join', requireAuth, async (req, res) => {
     if (error) throw error;
     if (!group) return res.status(404).json({ error: 'Convite não encontrado.' });
 
-    const { error: mErr } = await supabase.from('group_members').upsert({ group_id: group.id, user_id: req.userId, role: 'member' }, { onConflict: 'group_id,user_id' });
-    if (mErr) throw mErr;
+    const { data: existingMembership, error: membershipCheckError } = await supabase
+      .from('group_members').select('role').eq('group_id', group.id).eq('user_id', req.userId).maybeSingle();
+    if (membershipCheckError) throw membershipCheckError;
+    if (!existingMembership) {
+      const { error: mErr } = await supabase.from('group_members').insert({ group_id: group.id, user_id: req.userId, role: 'member' });
+      if (mErr && mErr.code !== '23505') throw mErr;
+    }
 
     const { error: uErr } = await supabase.from('app_users').update({ active_group_id: group.id }).eq('id', req.userId);
     if (uErr) throw uErr;
