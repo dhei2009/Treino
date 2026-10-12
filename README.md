@@ -1,39 +1,37 @@
-# Shape Together 10.2.0 — base do Planejador
+# Shape Together 10.3.0 — central de organização pessoal
 
-Este pacote prepara a primeira etapa da expansão do Shape Together para uma plataforma de planejamento pessoal e compartilhado. Ele inclui os ajustes acumulados da versão 10.1.2 e o novo Planejador semanal/mensal. O ZIP de entrega contém somente arquivos alterados ou adicionados em relação ao repositório original recebido; os demais arquivos originais devem permanecer no lugar.
+Esta entrega reformula a experiência principal do Shape Together sem remover o acompanhamento de treinos, o calendário, a progressão, as anotações, o Planejador ou as salas compartilhadas.
 
-## O que entra nesta etapa
+## O que mudou
 
-- Novo módulo **Planejador** com visualização semanal e mensal.
-- Criação, listagem, conclusão/reabertura e exclusão de tarefas.
-- Data opcional, detalhes, prioridade e categoria.
-- Tarefas pessoais privadas e tarefas compartilhadas no espaço de uma sala.
-- Permissões para que apenas o criador ou um administrador/proprietário da sala altere ou exclua uma tarefa compartilhada.
-- Validação de dados no backend, consultas limitadas a períodos razoáveis e cabeçalhos de não-cache nas rotas da API.
-- Migração aditiva do banco, sem converter tarefas em registros de treino.
-- Referências CSS/JS versionadas na build `10.2.0 / 2026.10.12-planner-foundation-1`.
-- Correções da base 10.1.2: separação de registros pessoais e por sala, suporte à descoberta de salas públicas, preservação de papéis e melhorias de integridade descritas abaixo.
+- **Nova página inicial:** painel de vida pessoal com saudação, resumo de tarefas/metas/hábitos/treinos, atalhos para as seis áreas e lista das tarefas de hoje.
+- **Nova área “Metas & hábitos”:** criação, edição, pausa, conclusão e exclusão de metas e projetos; percentuais de progresso; hábitos com frequência e marcação diária; resumo dos últimos sete dias.
+- **Dados persistentes:** metas, projetos, hábitos e registros diários são salvos no Supabase por rotas autenticadas do Worker. Esses dados ficam pessoais e separados das salas.
+- **Planejador ampliado:** visão por dia, semana, mês e ano. A visão anual mostra um resumo dos 12 meses e abre o calendário detalhado do mês escolhido. Calendários vazios continuam visíveis para facilitar o início do planejamento.
+- **Navegação redesenhada:** rótulos mais claros, visual coerente entre áreas e barra móvel rolável para não esconder os atalhos em telas estreitas.
+- **Preservação das funcionalidades anteriores:** os registros e gráficos de treino, as notas dos dias, o Planejador semanal/mensal, a alternância entre espaços e o fluxo de login continuam nas telas existentes.
 
-## Como aplicar com segurança
+## Como aplicar
 
-1. Faça backup do Supabase e confirme que está trabalhando na branch `cloudflare-worker`.
-2. Extraia o ZIP e substitua/crie os arquivos nos caminhos exatos. Não apague os outros arquivos que não aparecem no pacote.
-3. No Supabase SQL Editor, confira as migrações já aplicadas. Se ainda não estiverem no banco, execute na ordem apropriada: `supabase/groups-visibility.sql`, `supabase/workspace-mode.sql`, `supabase/group-day-records.sql` e, por último, `supabase/planner-tasks.sql`. Não execute novamente migrações antigas sem conferir o estado do banco, especialmente `group-day-records.sql`, que copia registros históricos para as salas participantes.
-4. Verifique se os secrets atuais do Cloudflare continuam configurados. Nenhuma chave administrativa deve ser colocada no frontend.
-5. Rode `npm test` e `npm run check` em um ambiente com as dependências do projeto instaladas.
-6. Envie os arquivos ao GitHub na branch `cloudflare-worker`, publique o Worker e faça recarga forçada no navegador.
-7. Valide manualmente em desktop e celular: login, Início, Planejador, Calendário, radar/gráficos, anotações, alternância pessoal/sala, convite, exclusão de tarefa e permissões entre dois participantes. Também confirme a tela de novidades com a versão `10.2.0`.
+1. Faça uma cópia de segurança do repositório e do Supabase. Use a branch `cloudflare-worker`.
+2. Extraia este ZIP sobre a pasta raiz do projeto, mantendo os caminhos. **O ZIP contém somente arquivos alterados ou novos**; não apague arquivos que não estão nele.
+3. Antes de publicar, abra o SQL Editor do Supabase e execute uma vez o conteúdo de `supabase/personal-organization.sql`. A migração cria as tabelas de metas/projetos/hábitos e os registros diários de hábitos. Não apaga nem converte dados de treino, tarefas existentes ou salas.
+4. Publique os arquivos na branch `cloudflare-worker` e faça o deploy do Worker com os secrets já configurados. Não coloque chaves do Supabase no frontend.
+5. Atualize o site sem cache. Entre em **Metas & hábitos**, crie uma meta, crie um projeto, crie um hábito e marque-o como feito hoje. Atualize a página para confirmar a persistência.
+6. Teste também Início, Planejador diário/semanal/mensal/anual, Treinos/calendário, Progresso, Diário/Anotações, sala/convites, alternância de espaço, perfil, temas e logout.
 
-## Migração nova: `supabase/planner-tasks.sql`
+## Arquivos nesta entrega
 
-A migração é **aditiva**: cria a tabela `planner_tasks`, índices e trigger; não altera nem apaga `day_records` ou `group_day_records`. Ativa RLS e bloqueia acesso direto de `anon`/`authenticated`; a aplicação acessa a tabela exclusivamente por rotas autenticadas do Worker. Tarefas pessoais ficam separadas das tarefas ligadas a uma sala.
+- `Public/index.html`
+- `Public/js/app.js`
+- `Public/css/style.css`
+- `Public/js/modules/planner.js`
+- `Public/js/modules/organizer.js` (novo)
+- `server.js`
+- `package.json`
+- `supabase/personal-organization.sql` (novo)
+- `README.md`
 
-Para instalações novas, `supabase/schema.sql` também contém a estrutura da tabela. Para o banco que já existe, use `planner-tasks.sql`; não recrie o banco e não execute `schema.sql` sobre um banco em uso apenas para instalar este recurso.
+## Verificações locais
 
-## Limites intencionais da primeira etapa
-
-Ainda não fazem parte desta entrega: recorrência automática, metas e marcos, atribuição de tarefas a participantes específicos, notificações, planejamento anual assistido, exportação e sugestões com IA. Essas partes estão descritas em `docs/PLANO-ARQUITETURA.md` e devem ser implementadas em fases com testes de regressão.
-
-## O que foi verificado no pacote
-
-A verificação local cobre sintaxe JavaScript, testes unitários das validações e os testes de sessão já existentes. Não significa que o banco foi migrado, nem que o pacote tenha sido enviado ao GitHub, publicado no Cloudflare ou validado visualmente no site online. Essas etapas precisam ser executadas e verificadas depois da aplicação do ZIP.
+Rode `npm test` e `npm run check` após aplicar os arquivos no projeto completo e com as dependências instaladas. A verificação local não significa que o ZIP foi enviado ao GitHub, implantado no Cloudflare ou testado contra o banco online; essas etapas dependem da publicação no seu ambiente.

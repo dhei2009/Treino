@@ -1,6 +1,6 @@
 {
   "name": "shape-together",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "private": true,
   "type": "module",
   "engines": {
@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test session-cookie.test.js planner-validation.test.js",
-    "check": "node --check server.js && node --check planner-validation.js && node --check Public/js/app.js && node --check Public/js/modules/planner.js",
+    "check": "node --check server.js && node --check planner-validation.js && node --check Public/js/app.js && node --check Public/js/modules/planner.js && node --check Public/js/modules/organizer.js",
     "deploy": "wrangler deploy",
     "preview": "wrangler dev"
   },

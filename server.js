@@ -31,6 +31,8 @@ const REQUIRED_TABLES = [
   'day_records',
   'group_day_records',
   'planner_tasks',
+  'personal_organizer_items',
+  'personal_habit_logs',
   'user_preferences'
 ];
 
@@ -684,7 +686,7 @@ function appOrigin(req) {
 }
 
 const databaseRoutes =
-  /^\/api\/(?:health|session|auth\/google-session|login|logout|state|day(?:\/[^/]+)?|tasks(?:\/[^/]+)?|settings(?:\/workspace-default)?|account(?:\/delete)?|workspace|groups(?:\/public)?|invite|group(?:\/(?:join|join-public))?|levels)$/;
+  /^\/api\/(?:health|session|auth\/google-session|login|logout|state|day(?:\/[^/]+)?|tasks(?:\/[^/]+)?|organizer(?:\/.*)?|settings(?:\/workspace-default)?|account(?:\/delete)?|workspace|groups(?:\/public)?|invite|group(?:\/(?:join|join-public))?|levels)$/;
 
 const app = express();
 app.set('trust proxy', 1);
@@ -1321,6 +1323,206 @@ app.delete('/api/tasks/:taskId', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Planner task delete failed:', error);
     return res.status(500).json({ error: 'Não foi possível excluir a tarefa. Tente novamente.' });
+  }
+});
+
+
+// Personal organization: goals, projects and habit check-ins.
+const ORGANIZER_ITEM_COLUMNS = 'id, owner_id, type, title, details, due_date, priority, status, progress, cadence, created_at, updated_at';
+
+function isOrganizerDate(value) {
+  const text = String(value || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
+  const parsed = new Date(`${text}T12:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === text;
+}
+
+function serializeOrganizerItem(row) {
+  return {
+    id: row.id,
+    type: row.type,
+    title: row.title,
+    details: row.details || '',
+    dueDate: row.due_date || null,
+    priority: row.priority || 'normal',
+    status: row.status || 'active',
+    progress: Number(row.progress) || 0,
+    cadence: row.cadence || 'daily',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function validateOrganizerItemInput(body, { partial = false } = {}) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return { error: 'Dados do item inválidos.' };
+  }
+  const value = {};
+  const has = (key) => Object.prototype.hasOwnProperty.call(body, key);
+  const allowedTypes = new Set(['goal', 'project', 'habit']);
+  const allowedPriorities = new Set(['low', 'normal', 'high']);
+  const allowedStatuses = new Set(['active', 'paused', 'done']);
+  const allowedCadences = new Set(['daily', 'weekdays', 'weekly']);
+
+  if (!partial || has('type')) {
+    const type = String(body.type || '').trim();
+    if (!allowedTypes.has(type)) return { error: 'Selecione uma categoria válida: meta, projeto ou hábito.' };
+    if (!partial) value.type = type;
+  }
+  if (!partial || has('title')) {
+    const title = String(body.title || '').trim();
+    if (title.length < 1 || title.length > 160) return { error: 'O nome deve ter entre 1 e 160 caracteres.' };
+    value.title = title;
+  }
+  if (!partial || has('details')) {
+    const details = String(body.details ?? '').trim();
+    if (details.length > 2000) return { error: 'A descrição deve ter no máximo 2.000 caracteres.' };
+    value.details = details;
+  }
+  if (!partial || has('dueDate')) {
+    const date = body.dueDate === '' || body.dueDate === null || body.dueDate === undefined ? null : String(body.dueDate);
+    if (date !== null && !isOrganizerDate(date)) return { error: 'O prazo informado não é uma data válida.' };
+    value.due_date = date;
+  }
+  if (!partial || has('priority')) {
+    const priority = String(body.priority || 'normal');
+    if (!allowedPriorities.has(priority)) return { error: 'Prioridade inválida.' };
+    value.priority = priority;
+  }
+  if (!partial || has('status')) {
+    const status = String(body.status || (partial ? '' : 'active'));
+    if (!allowedStatuses.has(status)) return { error: 'Estado inválido.' };
+    value.status = status;
+  }
+  if (!partial || has('progress')) {
+    const progress = body.progress === undefined && !partial ? 0 : Number(body.progress);
+    if (!Number.isInteger(progress) || progress < 0 || progress > 100) return { error: 'O progresso deve ser um número inteiro de 0 a 100.' };
+    value.progress = progress;
+  }
+  if (!partial || has('cadence')) {
+    const cadence = String(body.cadence || 'daily');
+    if (!allowedCadences.has(cadence)) return { error: 'Frequência de hábito inválida.' };
+    value.cadence = cadence;
+  }
+  if (partial && !Object.keys(value).length) return { error: 'Informe ao menos um campo para atualizar.' };
+  return { value };
+}
+
+app.get('/api/organizer', requireAuth, async (req, res) => {
+  const to = req.query.to === undefined ? new Date().toISOString().slice(0, 10) : String(req.query.to);
+  let from = req.query.from === undefined ? null : String(req.query.from);
+  if (!isOrganizerDate(to) || (from !== null && !isOrganizerDate(from))) {
+    return res.status(400).json({ error: 'O período informado não é válido.' });
+  }
+  if (!from) {
+    const start = new Date(`${to}T12:00:00.000Z`);
+    start.setUTCDate(start.getUTCDate() - 59);
+    from = start.toISOString().slice(0, 10);
+  }
+  if (from > to) return res.status(400).json({ error: 'A data inicial precisa vir antes da data final.' });
+  const span = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000;
+  if (span > 366) return res.status(400).json({ error: 'O intervalo de hábitos não pode ultrapassar 367 dias.' });
+  try {
+    const supabase = requireSupabase();
+    const [itemsResult, logsResult] = await Promise.all([
+      supabase.from('personal_organizer_items').select(ORGANIZER_ITEM_COLUMNS)
+        .eq('owner_id', req.userId).order('created_at', { ascending: false }).limit(500),
+      supabase.from('personal_habit_logs').select('id, item_id, log_date')
+        .eq('owner_id', req.userId).gte('log_date', from).lte('log_date', to)
+        .order('log_date', { ascending: false }).limit(10000)
+    ]);
+    if (itemsResult.error) throw itemsResult.error;
+    if (logsResult.error) throw logsResult.error;
+    return res.json({
+      items: (itemsResult.data || []).map(serializeOrganizerItem),
+      habitLogs: (logsResult.data || []).map((row) => ({ id: row.id, itemId: row.item_id, date: row.log_date })),
+      from,
+      to
+    });
+  } catch (error) {
+    console.error('Personal organizer load failed:', error);
+    return res.status(500).json({ error: 'Não foi possível carregar sua organização pessoal. Confira a migração supabase/personal-organization.sql e tente novamente.' });
+  }
+});
+
+app.post('/api/organizer/items', requireAuth, async (req, res) => {
+  const parsed = validateOrganizerItemInput(req.body);
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
+  try {
+    const supabase = requireSupabase();
+    const { data, error } = await supabase.from('personal_organizer_items')
+      .insert({ owner_id: req.userId, ...parsed.value })
+      .select(ORGANIZER_ITEM_COLUMNS).single();
+    if (error) throw error;
+    return res.status(201).json({ item: serializeOrganizerItem(data) });
+  } catch (error) {
+    console.error('Personal organizer create failed:', error);
+    return res.status(500).json({ error: 'Não foi possível salvar este item. Confira a migração de organização pessoal e tente novamente.' });
+  }
+});
+
+app.patch('/api/organizer/items/:itemId', requireAuth, async (req, res) => {
+  const itemId = String(req.params.itemId || '');
+  if (!isUuid(itemId)) return res.status(400).json({ error: 'Identificador do item inválido.' });
+  const parsed = validateOrganizerItemInput(req.body, { partial: true });
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
+  try {
+    const supabase = requireSupabase();
+    const { data, error } = await supabase.from('personal_organizer_items')
+      .update(parsed.value).eq('id', itemId).eq('owner_id', req.userId)
+      .select(ORGANIZER_ITEM_COLUMNS).maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Item não encontrado nesta conta.' });
+    return res.json({ item: serializeOrganizerItem(data) });
+  } catch (error) {
+    console.error('Personal organizer update failed:', error);
+    return res.status(500).json({ error: 'Não foi possível atualizar este item. Tente novamente.' });
+  }
+});
+
+app.delete('/api/organizer/items/:itemId', requireAuth, async (req, res) => {
+  const itemId = String(req.params.itemId || '');
+  if (!isUuid(itemId)) return res.status(400).json({ error: 'Identificador do item inválido.' });
+  try {
+    const supabase = requireSupabase();
+    const { data, error } = await supabase.from('personal_organizer_items').delete()
+      .eq('id', itemId).eq('owner_id', req.userId).select('id').maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Item não encontrado nesta conta.' });
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error('Personal organizer delete failed:', error);
+    return res.status(500).json({ error: 'Não foi possível excluir este item. Tente novamente.' });
+  }
+});
+
+app.post('/api/organizer/items/:itemId/check', requireAuth, async (req, res) => {
+  const itemId = String(req.params.itemId || '');
+  if (!isUuid(itemId)) return res.status(400).json({ error: 'Identificador do hábito inválido.' });
+  const date = String(req.body?.date || '');
+  if (!isOrganizerDate(date)) return res.status(400).json({ error: 'A data de registro não é válida.' });
+  if (date > new Date().toISOString().slice(0, 10)) return res.status(400).json({ error: 'Não é possível registrar um hábito em uma data futura.' });
+  const done = req.body?.done === true;
+  try {
+    const supabase = requireSupabase();
+    const { data: item, error: itemError } = await supabase.from('personal_organizer_items')
+      .select('id, type').eq('id', itemId).eq('owner_id', req.userId).maybeSingle();
+    if (itemError) throw itemError;
+    if (!item) return res.status(404).json({ error: 'Hábito não encontrado nesta conta.' });
+    if (item.type !== 'habit') return res.status(400).json({ error: 'Somente hábitos podem receber registros diários.' });
+    if (done) {
+      const { error } = await supabase.from('personal_habit_logs')
+        .upsert({ owner_id: req.userId, item_id: itemId, log_date: date }, { onConflict: 'owner_id,item_id,log_date', ignoreDuplicates: true });
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from('personal_habit_logs').delete()
+        .eq('owner_id', req.userId).eq('item_id', itemId).eq('log_date', date);
+      if (error) throw error;
+    }
+    return res.json({ ok: true, itemId, date, done });
+  } catch (error) {
+    console.error('Personal habit check-in failed:', error);
+    return res.status(500).json({ error: 'Não foi possível registrar o hábito. Confira a migração de organização pessoal e tente novamente.' });
   }
 });
 
