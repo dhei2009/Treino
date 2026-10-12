@@ -8,13 +8,16 @@
   },
   "scripts": {
     "start": "node server.js",
-    "test": "node --test session-cookie.test.js",
-    "check": "node --check server.js"
+    "test": "node --test session-cookie.test.js planner-validation.test.js",
+    "check": "node --check server.js && node --check planner-validation.js && node --check Public/js/app.js && node --check Public/js/modules/planner.js",
+    "deploy": "wrangler deploy",
+    "preview": "wrangler dev"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.117.2",
-    "dotenv": "18.0.5",
-    "express": "5.2.1",
-    "socket.io": "4.8.4"
+    "express": "5.2.1"
+  },
+  "devDependencies": {
+    "wrangler": "4.147.0"
   }
 }
