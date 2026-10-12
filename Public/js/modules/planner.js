@@ -32,12 +32,14 @@
   };
   const rangeFor = () => {
     const anchor = new Date(state.anchor.getFullYear(), state.anchor.getMonth(), state.anchor.getDate(), 12);
+    if (state.view === 'day') return { from: anchor, to: anchor };
     if (state.view === 'month') {
       return {
         from: new Date(anchor.getFullYear(), anchor.getMonth(), 1, 12),
         to: new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0, 12)
       };
     }
+    if (state.view === 'year') return { from: new Date(anchor.getFullYear(), 0, 1, 12), to: new Date(anchor.getFullYear(), 11, 31, 12) };
     const from = new Date(anchor);
     const mondayOffset = (from.getDay() + 6) % 7;
     from.setDate(from.getDate() - mondayOffset);
@@ -47,14 +49,18 @@
   };
   const rangeText = () => {
     const { from, to } = rangeFor();
+    if (state.view === 'day') return from.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
     if (state.view === 'month') return from.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    if (state.view === 'year') return String(from.getFullYear());
     const sameMonth = from.getMonth() === to.getMonth();
     const left = from.toLocaleDateString('pt-BR', { day: '2-digit', month: sameMonth ? undefined : 'short' });
     const right = to.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
     return `${left} – ${right}`;
   };
   const shiftAnchor = (amount) => {
-    if (state.view === 'month') state.anchor = new Date(state.anchor.getFullYear(), state.anchor.getMonth() + amount, 1, 12);
+    if (state.view === 'year') state.anchor = new Date(state.anchor.getFullYear() + amount, 0, 1, 12);
+    else if (state.view === 'month') state.anchor = new Date(state.anchor.getFullYear(), state.anchor.getMonth() + amount, 1, 12);
+    else if (state.view === 'day') state.anchor = new Date(state.anchor.getFullYear(), state.anchor.getMonth(), state.anchor.getDate() + amount, 12);
     else state.anchor = new Date(state.anchor.getFullYear(), state.anchor.getMonth(), state.anchor.getDate() + amount * 7, 12);
   };
   const inCurrentWorkspace = () => state.workspaceMode === 'group' && state.groupId;
@@ -96,15 +102,17 @@
         <header class="head st-planner-heading">
           <div><div class="eyebrow">Planejamento ${inCurrentWorkspace() ? 'compartilhado' : 'pessoal'}</div>
             <h1>Transforme planos em progresso.</h1>
-            <p>Organize sua semana e seu mês sem misturar tarefas com os registros de treino.</p>
+            <p>Planeje do dia ao ano, acompanhe prioridades e avance sem misturar tarefas com seus registros de treino.</p>
           </div>
           <div class="st-planner-heading-mark" aria-hidden="true">ST<span>+</span></div>
         </header>
         <section class="card st-planner-panel" aria-label="Planejador de tarefas">
           <div class="st-planner-toolbar">
             <div class="st-planner-view-switch" role="group" aria-label="Visualização do planejamento">
+              <button type="button" data-st-view="day" aria-pressed="false">Dia</button>
               <button type="button" data-st-view="week" aria-pressed="true">Semana</button>
               <button type="button" data-st-view="month" aria-pressed="false">Mês</button>
+              <button type="button" data-st-view="year" aria-pressed="false">Ano</button>
             </div>
             <div class="st-planner-range-controls">
               <button class="soft st-planner-icon-button" type="button" data-st-prev aria-label="Período anterior">‹</button>
@@ -167,6 +175,31 @@
     return `<div class="st-planner-week-grid">${days.join('')}</div>${unscheduled.length ? `<section class="st-planner-unscheduled"><h3>Sem data <span>${unscheduled.length}</span></h3>${unscheduled.map((task) => taskMarkup(task)).join('')}</section>` : ''}`;
   }
 
+  function renderDay(tasks, range) {
+    const iso = toIso(range.from);
+    const daily = tasks.filter((task) => task.dueDate === iso);
+    const isToday = iso === toIso(new Date());
+    const dateTitle = range.from.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
+    const unscheduled = tasks.filter((task) => !task.dueDate);
+    return `<section class="st-planner-single-day ${isToday ? 'is-today' : ''}"><header><div><span>${escapeHtml(dateTitle)}</span><strong>${daily.length} ${daily.length === 1 ? 'tarefa com data' : 'tarefas com data'}</strong></div><button type="button" class="soft" data-st-add-date="${iso}">+ Planejar este dia</button></header><div class="st-planner-single-day-items">${daily.length ? daily.map((task) => taskMarkup(task)).join('') : '<div class="st-planner-empty-day-panel">Nenhuma tarefa planejada para este dia. Use o botão acima para começar.</div>'}</div></section>${unscheduled.length ? `<section class="st-planner-unscheduled"><h3>Sem data <span>${unscheduled.length}</span></h3>${unscheduled.map((task) => taskMarkup(task)).join('')}</section>` : ''}`;
+  }
+
+  function renderYear(tasks, range) {
+    const year = range.from.getFullYear();
+    const monthNames = Array.from({ length: 12 }, (_, month) => new Date(year, month, 1, 12).toLocaleDateString('pt-BR', { month: 'long' }));
+    const months = monthNames.map((label, month) => {
+      const prefix = `${year}-${pad(month + 1)}`;
+      const monthly = tasks.filter((task) => task.dueDate && task.dueDate.startsWith(prefix));
+      const completed = monthly.filter((task) => task.status === 'done').length;
+      const total = monthly.length;
+      const progress = total ? Math.round(completed / total * 100) : 0;
+      return `<button type="button" class="st-planner-year-month ${total ? 'has-tasks' : ''}" data-st-open-month="${month}" aria-label="Abrir ${escapeHtml(label)} de ${year}, ${total} tarefas"><span class="st-planner-year-month-top"><b>${escapeHtml(label)}</b><span>↗</span></span><strong>${total}</strong><small>${total === 1 ? 'tarefa' : 'tarefas'} · ${completed} concluída${completed === 1 ? '' : 's'}</small><span class="st-planner-year-progress"><i style="width:${progress}%"></i></span></button>`;
+    }).join('');
+    const unscheduled = tasks.filter((task) => !task.dueDate);
+    const dated = tasks.filter((task) => Boolean(task.dueDate)).length;
+    return `<div class="st-planner-year-heading"><div><span class="eyebrow">VISÃO ANUAL</span><h3>Um ano de passos possíveis.</h3><p>${dated} ${dated === 1 ? 'tarefa com data' : 'tarefas com data'} ao longo do ano. Escolha um mês para ver os detalhes.</p></div></div><div class="st-planner-year-grid">${months}</div>${unscheduled.length ? `<section class="st-planner-unscheduled"><h3>Sem data <span>${unscheduled.length}</span></h3>${unscheduled.map((task) => taskMarkup(task)).join('')}</section>` : ''}`;
+  }
+
   function renderMonth(tasks, range) {
     const firstWeekday = (range.from.getDay() + 6) % 7;
     const daysInMonth = range.to.getDate();
@@ -201,7 +234,7 @@
     const completed = sorted.filter((task) => task.status === 'done').length;
     const open = sorted.filter((task) => task.status === 'open').length;
     document.getElementById('stPlannerRange').textContent = rangeText();
-    document.getElementById('stPlannerListTitle').textContent = state.view === 'week' ? 'Sua semana' : 'Seu mês';
+    document.getElementById('stPlannerListTitle').textContent = ({ day: 'Seu dia', week: 'Sua semana', month: 'Seu mês', year: 'Seu ano' })[state.view] || 'Seu planejamento';
     document.getElementById('stPlannerCount').textContent = `${sorted.length} ${sorted.length === 1 ? 'tarefa' : 'tarefas'}`;
     document.getElementById('stPlannerStats').innerHTML = `<div><span>Planejadas</span><strong>${sorted.length}</strong></div><div><span>Em aberto</span><strong>${open}</strong></div><div><span>Concluídas</span><strong>${completed}</strong></div>`;
     document.querySelectorAll('[data-st-view]').forEach((button) => {
@@ -209,12 +242,11 @@
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', String(active));
     });
-    if (!sorted.length) {
-      viewport.innerHTML = `<div class="st-planner-empty"><span aria-hidden="true">✦</span><strong>Seu espaço está livre.</strong><p>Adicione uma tarefa acima para começar a organizar este período.</p></div>`;
-      return;
-    }
-    // In week view, show every day plus undated tasks; month view uses a calendar grid.
-    viewport.innerHTML = state.view === 'week' ? renderWeek(sorted, range) : renderMonth(sorted, range);
+    // Keep each calendar visible when empty, so the user can explore dates and start planning.
+    if (state.view === 'day') viewport.innerHTML = renderDay(sorted, range);
+    else if (state.view === 'week') viewport.innerHTML = renderWeek(sorted, range);
+    else if (state.view === 'year') viewport.innerHTML = renderYear(sorted, range);
+    else viewport.innerHTML = renderMonth(sorted, range);
   }
 
   async function loadTasks() {
@@ -312,7 +344,18 @@
   function onClick(event) {
     const viewButton = event.target.closest('[data-st-view]');
     if (viewButton) {
-      state.view = viewButton.dataset.stView === 'month' ? 'month' : 'week';
+      const nextView = viewButton.dataset.stView;
+      if (!['day', 'week', 'month', 'year'].includes(nextView)) return;
+      state.view = nextView;
+      if (nextView === 'year') state.anchor = new Date(state.anchor.getFullYear(), 0, 1, 12);
+      if (nextView === 'month') state.anchor = new Date(state.anchor.getFullYear(), state.anchor.getMonth(), 1, 12);
+      loadTasks();
+      return;
+    }
+    const openMonth = event.target.closest('[data-st-open-month]');
+    if (openMonth) {
+      state.view = 'month';
+      state.anchor = new Date(state.anchor.getFullYear(), Number(openMonth.dataset.stOpenMonth), 1, 12);
       loadTasks();
       return;
     }
@@ -352,6 +395,32 @@
     if (remove) deleteTask(remove.dataset.stDelete);
   }
 
+  async function loadDashboardSummary(detail = {}) {
+    try {
+      const now = new Date();
+      const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12);
+      monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+      const sunday = new Date(monday);
+      sunday.setDate(sunday.getDate() + 6);
+      const toIsoLocal = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+      const groupMode = detail.workspaceMode === 'group' && detail.groupId;
+      const params = new URLSearchParams({
+        from: toIsoLocal(monday),
+        to: toIsoLocal(sunday),
+        workspaceMode: groupMode ? 'group' : 'personal'
+      });
+      if (groupMode) params.set('groupId', detail.groupId);
+      const payload = await request(`/api/tasks?${params.toString()}`);
+      window.dispatchEvent(new CustomEvent('st:planner-dashboard-summary', {
+        detail: { tasks: Array.isArray(payload.tasks) ? payload.tasks : [], currentUserId: payload.currentUserId }
+      }));
+    } catch (error) {
+      window.dispatchEvent(new CustomEvent('st:planner-dashboard-summary', {
+        detail: { tasks: [], error: true, message: error.message || 'Resumo indisponível' }
+      }));
+    }
+  }
+
   function onPageChange(event) {
     const detail = event.detail || {};
     state.active = detail.page === 'planner';
@@ -359,6 +428,7 @@
       state.requestId += 1;
       if (state.pollTimer) window.clearInterval(state.pollTimer);
       state.pollTimer = null;
+      if (detail.page === 'home') loadDashboardSummary(detail);
       return;
     }
     const nextMode = detail.workspaceMode === 'group' && detail.groupId ? 'group' : 'personal';
