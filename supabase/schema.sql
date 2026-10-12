@@ -31,8 +31,10 @@ create table if not exists public.groups (
   invite_code text not null unique,
   challenge_start date not null default date '2026-09-29',
   challenge_end date not null default date '2026-12-31',
+  visibility text not null default 'private',
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint groups_visibility_check check (visibility in ('public', 'private'))
 );
 
 alter table public.app_users
@@ -61,12 +63,47 @@ create table if not exists public.day_records (
   constraint day_records_note_check check (char_length(note) <= 500)
 );
 
+create table if not exists public.group_day_records (
+  group_id uuid not null references public.groups(id) on delete cascade,
+  user_id uuid not null references public.app_users(id) on delete cascade,
+  day date not null,
+  status text not null,
+  note text not null default '',
+  updated_at timestamptz not null default now(),
+  primary key (group_id, user_id, day),
+  constraint group_day_records_status_check check (status in ('red', 'green', 'blue', 'orange')),
+  constraint group_day_records_note_check check (char_length(note) <= 500)
+);
+
+-- Planejador genérico (tarefas pessoais e tarefas compartilhadas por sala).
+-- Em instalações existentes, prefira executar supabase/planner-tasks.sql.
+create table if not exists public.planner_tasks (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid references public.app_users(id) on delete set null,
+  workspace_group_id uuid references public.groups(id) on delete cascade,
+  title text not null,
+  details text not null default '',
+  due_date date,
+  priority text not null default 'normal',
+  status text not null default 'open',
+  category text not null default 'general',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint planner_tasks_title_check check (char_length(btrim(title)) between 1 and 160),
+  constraint planner_tasks_details_check check (char_length(details) <= 2000),
+  constraint planner_tasks_priority_check check (priority in ('low', 'normal', 'high')),
+  constraint planner_tasks_status_check check (status in ('open', 'done', 'cancelled')),
+  constraint planner_tasks_category_check check (category in ('general', 'personal', 'study', 'work', 'training', 'project'))
+);
+
 create table if not exists public.user_preferences (
   user_id uuid primary key references public.app_users(id) on delete cascade,
   theme text not null default 'light',
   accent text not null default '#11120F',
+  default_workspace_mode text not null default 'personal',
   updated_at timestamptz not null default now(),
   constraint user_preferences_theme_check check (theme in ('light','dark')),
+  constraint user_preferences_default_workspace_mode_check check (default_workspace_mode in ('personal','group')),
   constraint user_preferences_accent_check check (accent ~ '^#[0-9A-Fa-f]{6}$')
 );
 
@@ -82,6 +119,10 @@ create table if not exists public.group_invites (
 create index if not exists idx_group_members_user on public.group_members(user_id);
 create index if not exists idx_group_members_group on public.group_members(group_id);
 create index if not exists idx_day_records_user_day on public.day_records(user_id, day desc);
+create index if not exists idx_group_day_records_group_day on public.group_day_records(group_id, day desc);
+create index if not exists idx_planner_tasks_owner_due on public.planner_tasks(owner_id, due_date);
+create index if not exists idx_planner_tasks_group_due on public.planner_tasks(workspace_group_id, due_date) where workspace_group_id is not null;
+create index if not exists idx_planner_tasks_updated on public.planner_tasks(updated_at desc);
 create index if not exists idx_app_users_active_group on public.app_users(active_group_id);
 create index if not exists idx_group_invites_code on public.group_invites(code);
 
@@ -103,6 +144,11 @@ for each row execute function public.set_updated_at();
 drop trigger if exists trg_groups_updated_at on public.groups;
 create trigger trg_groups_updated_at
 before update on public.groups
+for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_planner_tasks_updated_at on public.planner_tasks;
+create trigger trg_planner_tasks_updated_at
+before update on public.planner_tasks
 for each row execute function public.set_updated_at();
 
 drop trigger if exists trg_user_preferences_updated_at on public.user_preferences;
@@ -185,6 +231,8 @@ alter table public.app_users enable row level security;
 alter table public.groups enable row level security;
 alter table public.group_members enable row level security;
 alter table public.day_records enable row level security;
+alter table public.group_day_records enable row level security;
+alter table public.planner_tasks enable row level security;
 alter table public.user_preferences enable row level security;
 alter table public.group_invites enable row level security;
 
@@ -324,17 +372,47 @@ on public.group_invites for delete
 to authenticated
 using (public.is_group_owner_or_admin(group_id));
 
+-- group_day_records: participante só consulta registros da própria sala e só altera os próprios.
+drop policy if exists group_day_records_select_member on public.group_day_records;
+create policy group_day_records_select_member
+on public.group_day_records for select
+to authenticated
+using (public.is_group_member(group_id));
+
+drop policy if exists group_day_records_insert_own on public.group_day_records;
+create policy group_day_records_insert_own
+on public.group_day_records for insert
+to authenticated
+with check (user_id = public.current_app_user_id() and public.is_group_member(group_id));
+
+drop policy if exists group_day_records_update_own on public.group_day_records;
+create policy group_day_records_update_own
+on public.group_day_records for update
+to authenticated
+using (user_id = public.current_app_user_id() and public.is_group_member(group_id))
+with check (user_id = public.current_app_user_id() and public.is_group_member(group_id));
+
+drop policy if exists group_day_records_delete_own on public.group_day_records;
+create policy group_day_records_delete_own
+on public.group_day_records for delete
+to authenticated
+using (user_id = public.current_app_user_id() and public.is_group_member(group_id));
+
 -- Grants mínimos para o futuro acesso direto pelo frontend após Google Auth.
 revoke all on table public.app_users from anon, authenticated;
 revoke all on table public.groups from anon, authenticated;
 revoke all on table public.group_members from anon, authenticated;
 revoke all on table public.day_records from anon, authenticated;
+revoke all on table public.group_day_records from anon, authenticated;
+revoke all on table public.planner_tasks from anon, authenticated;
 revoke all on table public.user_preferences from anon, authenticated;
 revoke all on table public.group_invites from anon, authenticated;
 grant select, insert, update on public.app_users to authenticated;
 grant select, insert, update on public.groups to authenticated;
 grant select, insert, delete on public.group_members to authenticated;
 grant select, insert, update, delete on public.day_records to authenticated;
+grant select, insert, update, delete on public.group_day_records to authenticated;
+grant all on table public.planner_tasks to service_role;
 grant select, insert, update on public.user_preferences to authenticated;
 grant select, insert, delete on public.group_invites to authenticated;
 
