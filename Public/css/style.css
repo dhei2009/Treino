@@ -851,3 +851,11 @@ body.st-help-open{overflow:hidden;}
  .week-scale-statuses{gap:6px 10px;}
  .week-scale-statuses>span{font-size:8.5px;}
 }
+
+
+/* Ajuda integrada ao cabeçalho: identidade grafite + laranja, sem ocupar a área do conteúdo. */
+.topbar>div:first-child{position:relative;padding-right:42px;min-width:0;}
+.st-help-top-trigger{position:absolute;right:0;top:50%;transform:translateY(-50%);width:31px;height:31px;padding:0;gap:0;border:1px solid rgba(255,139,42,.48);border-radius:10px;background:linear-gradient(145deg,#24221f,#11110f);box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 3px 10px rgba(0,0,0,.13);color:#ff9a3d;margin:0;}
+.st-help-top-trigger:hover{transform:translateY(calc(-50% - 1px));border-color:#ff9a3d;background:linear-gradient(145deg,#30271f,#171512);}
+.st-help-top-trigger .st-help-mark{width:20px;height:20px;border:1.5px solid #ff9a3d;border-radius:7px;background:linear-gradient(145deg,#ffad51,#f47719);color:#211307;font-size:14px;box-shadow:0 0 12px rgba(255,135,35,.2);}
+@media(max-width:600px){.topbar{padding-left:14px;padding-right:14px}.topbar>div:first-child{padding-right:38px}.st-help-top-trigger{width:29px;height:29px;border-radius:9px;}.st-help-top-trigger .st-help-mark{width:19px;height:19px;}}
