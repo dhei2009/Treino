@@ -1,11 +1,11 @@
 (()=>{'use strict';
 // Centralize the visible release notes. Bump RELEASE_VERSION whenever you publish a named release.
-const RELEASE_VERSION='10.1.0';
-const RELEASE_BUILD_ID='2026.10.11-ux-101';
+const RELEASE_VERSION='10.1.1';
+const RELEASE_BUILD_ID='2026.10.12-help-nav-release-fix';
 const RELEASE_HISTORY=[
- {version:'10.1.0',title:'Ajuda organizada por assunto',desc:'Cada aba tem um botão de ajuda com explicações em gavetas coloridas, para manter a tela mais limpa.'},
- {version:'10.1.0',title:'Radar com fotos e eixos por cor',desc:'A legenda identifica os participantes com a foto do perfil, e cada dimensão do radar tem uma cor mais fácil de reconhecer.'},
- {version:'10.1.0',title:'Novidades e cache revisados',desc:'A versão e o identificador de build são atualizados juntos, com URLs versionadas para reduzir o risco de mostrar arquivos antigos.'},
+ {version:'10.1.1',title:'Ajuda integrada à navegação',desc:'Cada aba tem um botão de ajuda com explicações em gavetas coloridas, para manter a tela mais limpa.'},
+ {version:'10.1.1',title:'Tela de novidades e cache corrigidos',desc:'A legenda identifica os participantes com a foto do perfil, e cada dimensão do radar tem uma cor mais fácil de reconhecer.'},
+ {version:'10.1.0',title:'Radar com fotos e eixos por cor',desc:'A versão e o identificador de build são atualizados juntos, com URLs versionadas para reduzir o risco de mostrar arquivos antigos.'},
  {version:'10.0.0',title:'Radar hexagonal com seis dimensões',desc:'Consistência, categorias de registro e pontuação média usam a mesma escala visual de 0 a 100.'}
 ];
 // Capture the original asset URLs before the theme system turns the favicon into an SVG data URL.
@@ -272,7 +272,7 @@ function openHelpModal(pageKey){
 }
 function filterHelpDrawers(){const q=($('stHelpSearch')?.value||'').trim().toLocaleLowerCase('pt-BR');document.querySelectorAll('#stHelpDrawers .st-help-drawer').forEach(d=>{const match=!q||d.textContent.toLocaleLowerCase('pt-BR').includes(q);d.hidden=!match;if(q&&match)d.open=true})}
 function closeHelpModal(){const m=$('stHelpModal');if(m)m.classList.remove('open');document.body.classList.remove('st-help-open')}
-function attachPageHelp(pageKey){const pageEl=$('page-'+pageKey),head=pageEl?.querySelector('.head');if(!head||head.querySelector('.st-help-trigger'))return;const button=document.createElement('button');button.className='st-help-trigger';button.type='button';button.setAttribute('aria-label',`Ajuda da aba ${PAGES[pageKey]?.[0]||pageKey}`);button.innerHTML='<span class="st-help-mark" aria-hidden="true">!</span><span>Ajuda</span>';button.onclick=()=>openHelpModal(pageKey);head.appendChild(button)}
+function attachPageHelp(pageKey){const topbar=$('topTitle')?.parentElement;if(!topbar)return;let button=$('stPageHelpTrigger');if(!button){button=document.createElement('button');button.id='stPageHelpTrigger';button.className='st-help-trigger st-help-top-trigger';button.type='button';button.innerHTML='<span class="st-help-mark" aria-hidden="true">!</span>';topbar.appendChild(button)}button.setAttribute('aria-label',`Ajuda da aba ${PAGES[pageKey]?.[0]||pageKey}`);button.title=`Ajuda · ${PAGES[pageKey]?.[0]||pageKey}`;button.onclick=()=>openHelpModal(pageKey)}
 function setPage(p){if(p==='group'&&!(workspaceMode==='group'&&state?.group))p='home';if(!PAGES[p])p='home';page=p;document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active',el.id==='page-'+p));document.querySelectorAll('[data-page]').forEach(el=>el.classList.toggle('active',el.dataset.page===p));$('topTitle').textContent=PAGES[p][0];$('topSub').textContent=workspaceMode==='group'&&state?.group?`Sala · ${state.group.name}`:PAGES[p][1];const activePage=$('page-'+p);activePage?.querySelectorAll('.card').forEach((el,i)=>el.style.setProperty('--card-i',i));attachPageHelp(p);window.scrollTo({top:0,behavior:'smooth'})}
 
 function renderApp(){workspaceMode=state?.workspaceMode||(state?.group?'group':'personal');renderHome();renderCalendar();renderProgress();renderNotes();if(workspaceMode==='group'&&state?.group)renderGroup();else $('page-group').innerHTML='';navHtml();setPage(page)}
@@ -412,7 +412,7 @@ async function getReleaseBuildFingerprint(){
  if(!RELEASE_ASSET_URLS.length)return null;
  try{
   const parts=await Promise.all(RELEASE_ASSET_URLS.map(async url=>{
-   try{const response=await fetch(url,{cache:'no-store',credentials:'same-origin'});if(!response.ok)return url+'\n#unavailable';return url+'\n'+await response.text()}
+   try{const freshUrl=new URL(url,location.href);freshUrl.searchParams.set('_st_release_check',RELEASE_BUILD_ID);const response=await fetch(freshUrl.href,{cache:'no-store',credentials:'same-origin'});if(!response.ok)return url+'\n#unavailable';return url+'\n'+await response.text()}
    catch{return url+'\n#unavailable'}
   }));
   return releaseHash(parts.join('\n---asset---\n'));
