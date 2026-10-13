@@ -12,6 +12,7 @@ import {
   sessionCookieHeader
 } from './session-cookie.js';
 import { validatePlannerRange, validatePlannerTaskInput } from './planner-validation.js';
+import { schemaMigrationHint } from './schema-error.js';
 
 const PORT = 3000;
 const AVATAR_BUCKET = 'avatars';
@@ -135,6 +136,14 @@ function requireSupabase() {
   const client = getSupabase();
   if (!client) throw databaseUnavailableError();
   return client;
+}
+
+// Convert known schema/migration problems into actionable responses without
+// leaking Postgres internals, SQL, or environment values to the browser.
+function respondDatabaseError(res, error, fallback) {
+  const hint = schemaMigrationHint(error);
+  if (hint) return res.status(503).json(hint);
+  return res.status(500).json({ error: fallback, code: 'SERVER_ERROR' });
 }
 
 function requireAuthClient() {
@@ -753,7 +762,7 @@ app.get('/api/health', async (_req, res) => {
     console.error('Health check failed:', e);
     res.status(503).json({
       ok: false,
-      error: e.message || 'Health check falhou.',
+      error: 'Não foi possível consultar o Supabase. Confira as configurações do Worker e os logs do Cloudflare.',
       config: configStatus(),
       stage: 2
     });
@@ -1063,7 +1072,7 @@ app.post('/api/login', async (req, res) => {
     res.json({ user: publicUser(u, await getPrefs(u.id)) });
   } catch (e) {
     console.error('Legacy login failed:', e);
-    res.status(500).json({ error: e.message });
+    return respondDatabaseError(res, e, 'Não foi possível entrar na conta. Verifique os dados e tente novamente.');
   }
 });
 
@@ -1147,7 +1156,7 @@ app.delete('/api/account', requireAuth, async (req, res) => {
     return res.json({ ok: true });
   } catch (e) {
     console.error('Account deletion failed:', e);
-    return res.status(500).json({ error: 'Não foi possível concluir a exclusão da conta. Nenhuma confirmação de exclusão foi emitida; tente novamente ou entre em contato com o suporte.' });
+    return respondDatabaseError(res, e, 'Não foi possível concluir a exclusão da conta. Nenhuma confirmação de exclusão foi emitida; tente novamente.');
   }
 });
 
@@ -1164,7 +1173,8 @@ app.get('/api/state', requireAuth, async (req, res) => {
     });
   } catch (e) {
     console.error('State load failed:', e);
-    res.status(500).json({ error: e.code === 'NO_GROUP' ? e.message : 'Não foi possível carregar os dados. Tente novamente.' });
+    if (e.code === 'NO_GROUP') return res.status(409).json({ error: e.message, code: 'NO_GROUP' });
+    return respondDatabaseError(res, e, 'Não foi possível carregar seus dados. Tente novamente.');
   }
 });
 
@@ -1248,7 +1258,7 @@ app.get('/api/tasks', requireAuth, async (req, res) => {
     return res.json({ tasks, currentUserId: req.userId });
   } catch (error) {
     console.error('Planner tasks load failed:', error);
-    return res.status(500).json({ error: 'Não foi possível carregar as tarefas. Confira a migração do Planejador e tente novamente.' });
+    return respondDatabaseError(res, error, 'Não foi possível carregar as tarefas. Tente novamente.');
   }
 });
 
@@ -1277,7 +1287,7 @@ app.post('/api/tasks', requireAuth, async (req, res) => {
     return res.status(201).json({ task: serializePlannerTask(data, true) });
   } catch (error) {
     console.error('Planner task create failed:', error);
-    return res.status(500).json({ error: 'Não foi possível salvar a tarefa. Tente novamente.' });
+    return respondDatabaseError(res, error, 'Não foi possível salvar a tarefa. Tente novamente.');
   }
 });
 
@@ -1301,7 +1311,7 @@ app.patch('/api/tasks/:taskId', requireAuth, async (req, res) => {
     return res.json({ task: serializePlannerTask(data, true) });
   } catch (error) {
     console.error('Planner task update failed:', error);
-    return res.status(500).json({ error: 'Não foi possível atualizar a tarefa. Tente novamente.' });
+    return respondDatabaseError(res, error, 'Não foi possível atualizar a tarefa. Tente novamente.');
   }
 });
 
@@ -1322,7 +1332,7 @@ app.delete('/api/tasks/:taskId', requireAuth, async (req, res) => {
     return res.json({ ok: true });
   } catch (error) {
     console.error('Planner task delete failed:', error);
-    return res.status(500).json({ error: 'Não foi possível excluir a tarefa. Tente novamente.' });
+    return respondDatabaseError(res, error, 'Não foi possível excluir a tarefa. Tente novamente.');
   }
 });
 
@@ -1441,7 +1451,7 @@ app.get('/api/organizer', requireAuth, async (req, res) => {
     });
   } catch (error) {
     console.error('Personal organizer load failed:', error);
-    return res.status(500).json({ error: 'Não foi possível carregar sua organização pessoal. Confira a migração supabase/personal-organization.sql e tente novamente.' });
+    return respondDatabaseError(res, error, 'Não foi possível carregar sua organização pessoal. Tente novamente.');
   }
 });
 
@@ -1457,7 +1467,7 @@ app.post('/api/organizer/items', requireAuth, async (req, res) => {
     return res.status(201).json({ item: serializeOrganizerItem(data) });
   } catch (error) {
     console.error('Personal organizer create failed:', error);
-    return res.status(500).json({ error: 'Não foi possível salvar este item. Confira a migração de organização pessoal e tente novamente.' });
+    return respondDatabaseError(res, error, 'Não foi possível salvar este item. Tente novamente.');
   }
 });
 
@@ -1476,7 +1486,7 @@ app.patch('/api/organizer/items/:itemId', requireAuth, async (req, res) => {
     return res.json({ item: serializeOrganizerItem(data) });
   } catch (error) {
     console.error('Personal organizer update failed:', error);
-    return res.status(500).json({ error: 'Não foi possível atualizar este item. Tente novamente.' });
+    return respondDatabaseError(res, error, 'Não foi possível atualizar este item. Tente novamente.');
   }
 });
 
@@ -1492,7 +1502,7 @@ app.delete('/api/organizer/items/:itemId', requireAuth, async (req, res) => {
     return res.json({ ok: true });
   } catch (error) {
     console.error('Personal organizer delete failed:', error);
-    return res.status(500).json({ error: 'Não foi possível excluir este item. Tente novamente.' });
+    return respondDatabaseError(res, error, 'Não foi possível excluir este item. Tente novamente.');
   }
 });
 
@@ -1522,7 +1532,7 @@ app.post('/api/organizer/items/:itemId/check', requireAuth, async (req, res) => 
     return res.json({ ok: true, itemId, date, done });
   } catch (error) {
     console.error('Personal habit check-in failed:', error);
-    return res.status(500).json({ error: 'Não foi possível registrar o hábito. Confira a migração de organização pessoal e tente novamente.' });
+    return respondDatabaseError(res, error, 'Não foi possível registrar o hábito. Tente novamente.');
   }
 });
 
@@ -1562,7 +1572,7 @@ app.post('/api/day', requireAuth, async (req, res) => {
     res.json({ ok: true, state: await loadStateForUser(req.userId, mode, group?.id || null) });
   } catch (e) {
     console.error('Day save failed:', e);
-    res.status(500).json({ error: 'Não foi possível salvar o registro. Tente novamente.' });
+    return respondDatabaseError(res, e, 'Não foi possível salvar o registro. Tente novamente.');
   }
 });
 
@@ -1591,7 +1601,7 @@ app.delete('/api/day/:date', requireAuth, async (req, res) => {
     res.json({ ok: true, state: await loadStateForUser(req.userId, mode, group?.id || null) });
   } catch (e) {
     console.error('Day delete failed:', e);
-    res.status(500).json({ error: 'Não foi possível apagar o registro. Tente novamente.' });
+    return respondDatabaseError(res, e, 'Não foi possível apagar o registro. Tente novamente.');
   }
 });
 
@@ -1659,7 +1669,7 @@ app.post('/api/settings', requireAuth, async (req, res) => {
     res.json({ ok: true, user: me, state });
   } catch (e) {
     console.error('Settings save failed:', e);
-    res.status(500).json({ error: e.message });
+    return respondDatabaseError(res, e, 'Não foi possível salvar suas configurações. Tente novamente.');
   }
 });
 
@@ -1690,7 +1700,7 @@ app.post('/api/settings/workspace-default', requireAuth, async (req, res) => {
     res.json({ ok: true, user: publicUser(await getUserById(req.userId), nextPrefs) });
   } catch (e) {
     console.error('Default workspace save failed:', e);
-    res.status(500).json({ error: e.message });
+    return respondDatabaseError(res, e, 'Não foi possível atualizar seu espaço inicial. Tente novamente.');
   }
 });
 
@@ -1712,7 +1722,7 @@ app.post('/api/workspace', requireAuth, async (req, res) => {
     res.json({ ok: true, state, me: publicUser(await getUserById(req.userId), await getPrefs(req.userId)) });
   } catch (e) {
     console.error('Workspace switch failed:', e);
-    res.status(500).json({ error: e.message });
+    return respondDatabaseError(res, e, 'Não foi possível trocar de espaço. Tente novamente.');
   }
 });
 
@@ -1721,7 +1731,7 @@ app.get('/api/groups', requireAuth, async (req, res) => {
     res.json({ groups: await groupsForUser(req.userId) });
   } catch (e) {
     console.error('Groups load failed:', e);
-    res.status(500).json({ error: e.message });
+    return respondDatabaseError(res, e, 'Não foi possível carregar as salas. Tente novamente.');
   }
 });
 
@@ -1755,7 +1765,7 @@ app.get('/api/groups/public', requireAuth, async (req, res) => {
     })) });
   } catch (e) {
     console.error('Public groups load failed:', e);
-    res.status(500).json({ error: 'Não foi possível carregar as salas públicas.' });
+    return respondDatabaseError(res, e, 'Não foi possível carregar as salas públicas. Tente novamente.');
   }
 });
 
@@ -1788,7 +1798,7 @@ app.post('/api/group/join-public', requireAuth, async (req, res) => {
     res.json({ ok: true, group, state, me: publicUser(await getUserById(req.userId), await getPrefs(req.userId)) });
   } catch (e) {
     console.error('Public group join failed:', e);
-    res.status(500).json({ error: 'Não foi possível entrar na sala pública.' });
+    return respondDatabaseError(res, e, 'Não foi possível entrar na sala pública. Tente novamente.');
   }
 });
 
@@ -1808,7 +1818,7 @@ app.post('/api/invite', requireAuth, async (req, res) => {
     });
   } catch (e) {
     console.error('Invite creation failed:', e);
-    res.status(500).json({ error: e.message });
+    return respondDatabaseError(res, e, 'Não foi possível criar o convite. Tente novamente.');
   }
 });
 
@@ -1849,7 +1859,7 @@ app.post('/api/group', requireAuth, async (req, res) => {
         console.error('Partial group cleanup failed:', cleanupError);
       }
     }
-    res.status(500).json({ error: 'Não foi possível criar a sala. Tente novamente.' });
+    return respondDatabaseError(res, e, 'Não foi possível criar a sala. Tente novamente.');
   }
 });
 
@@ -1879,7 +1889,7 @@ app.post('/api/group/join', requireAuth, async (req, res) => {
     res.json({ ok: true, group, state, me: publicUser(await getUserById(req.userId), await getPrefs(req.userId)) });
   } catch (e) {
     console.error('Group join failed:', e);
-    res.status(500).json({ error: e.message });
+    return respondDatabaseError(res, e, 'Não foi possível entrar na sala. Tente novamente.');
   }
 });
 

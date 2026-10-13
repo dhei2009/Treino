@@ -1,37 +1,50 @@
-# Shape Together 10.3.0 — central de organização pessoal
+# Shape Together 10.4.2 — recuperação e auditoria
 
-Esta entrega reformula a experiência principal do Shape Together sem remover o acompanhamento de treinos, o calendário, a progressão, as anotações, o Planejador ou as salas compartilhadas.
+Este pacote corrige a inicialização do aplicativo e melhora o diagnóstico de falhas de banco/servidor. Ele é incremental: extraia sobre a raiz do repositório existente, preserve os demais arquivos e não apague CSS, módulos ou dados.
 
-## O que mudou
+## O que foi corrigido
 
-- **Nova página inicial:** painel de vida pessoal com saudação, resumo de tarefas/metas/hábitos/treinos, atalhos para as seis áreas e lista das tarefas de hoje.
-- **Nova área “Metas & hábitos”:** criação, edição, pausa, conclusão e exclusão de metas e projetos; percentuais de progresso; hábitos com frequência e marcação diária; resumo dos últimos sete dias.
-- **Dados persistentes:** metas, projetos, hábitos e registros diários são salvos no Supabase por rotas autenticadas do Worker. Esses dados ficam pessoais e separados das salas.
-- **Planejador ampliado:** visão por dia, semana, mês e ano. A visão anual mostra um resumo dos 12 meses e abre o calendário detalhado do mês escolhido. Calendários vazios continuam visíveis para facilitar o início do planejamento.
-- **Navegação redesenhada:** rótulos mais claros, visual coerente entre áreas e barra móvel rolável para não esconder os atalhos em telas estreitas.
-- **Preservação das funcionalidades anteriores:** os registros e gráficos de treino, as notas dos dias, o Planejador semanal/mensal, a alternância entre espaços e o fluxo de login continuam nas telas existentes.
+- A tela de falha não chama mais todo erro de “manutenção”; preserva a causa útil e oferece **Tentar novamente**.
+- Uma promessa assíncrona rejeitada isoladamente não oculta mais toda a aplicação. Ela é registrada no console para diagnóstico.
+- A inicialização consulta `/api/health` em caso de erro e tenta distinguir configuração incompleta, timeout/conexão, bucket de fotos ausente e migrações de banco pendentes.
+- O servidor traduz falhas conhecidas de PostgREST/Postgres em instruções seguras e específicas, sem expor SQL ou credenciais.
+- O acesso a `localStorage` passou a ser tolerante a navegadores que bloqueiam o armazenamento local, impedindo que uma preferência visual derrube o app inteiro.
+- Os identificadores da versão e das URLs de CSS/JavaScript foram alinhados para evitar mistura entre arquivos em cache.
+- Os botões de cores predefinidas no seletor de aparência agora são HTML válido e possuem os valores de cor esperados.
+- Os testes existentes foram ampliados com testes de classificação de erros de esquema.
 
-## Como aplicar
-
-1. Faça uma cópia de segurança do repositório e do Supabase. Use a branch `cloudflare-worker`.
-2. Extraia este ZIP sobre a pasta raiz do projeto, mantendo os caminhos. **O ZIP contém somente arquivos alterados ou novos**; não apague arquivos que não estão nele.
-3. Antes de publicar, abra o SQL Editor do Supabase e execute uma vez o conteúdo de `supabase/personal-organization.sql`. A migração cria as tabelas de metas/projetos/hábitos e os registros diários de hábitos. Não apaga nem converte dados de treino, tarefas existentes ou salas.
-4. Publique os arquivos na branch `cloudflare-worker` e faça o deploy do Worker com os secrets já configurados. Não coloque chaves do Supabase no frontend.
-5. Atualize o site sem cache. Entre em **Metas & hábitos**, crie uma meta, crie um projeto, crie um hábito e marque-o como feito hoje. Atualize a página para confirmar a persistência.
-6. Teste também Início, Planejador diário/semanal/mensal/anual, Treinos/calendário, Progresso, Diário/Anotações, sala/convites, alternância de espaço, perfil, temas e logout.
-
-## Arquivos nesta entrega
+## Arquivos incluídos
 
 - `Public/index.html`
 - `Public/js/app.js`
-- `Public/css/style.css`
-- `Public/js/modules/planner.js`
-- `Public/js/modules/organizer.js` (novo)
 - `server.js`
 - `package.json`
-- `supabase/personal-organization.sql` (novo)
+- `schema-error.js`
+- `schema-error.test.js`
+- `supabase/group-day-records.sql`
 - `README.md`
+
+Os arquivos fora dessa lista devem permanecer na pasta do projeto. O SQL está incluído por ser a migração correspondente ao erro já observado: `Could not find the table 'public.group_day_records' in the schema cache`.
+
+## Instalação recomendada
+
+1. Baixe e extraia este ZIP na raiz do repositório do Shape Together, mantendo os caminhos. Substitua os arquivos com o mesmo nome e adicione os dois arquivos novos (`schema-error.js` e `schema-error.test.js`).
+2. No Supabase, abra **SQL Editor** e execute o conteúdo completo de `supabase/group-day-records.sql`. A migração é aditiva e idempotente: cria/configura a tabela de registros das salas e copia registros pessoais para as salas correspondentes sem apagar os registros pessoais. Se você já executou essa migração e ela terminou sem erros, não é necessário repeti-la.
+3. Faça commit/push dos arquivos na branch `cloudflare-worker` e publique um novo deploy do Cloudflare Worker. Mantenha os secrets existentes; nunca copie chaves secretas para o código ou para mensagens públicas.
+4. Abra `https://treino.dheisson-sousa.workers.dev/api/health`. A resposta contém apenas indicadores de configuração e tabelas. Se algum valor em `tables` for `false`, a interface agora informa a migração provável. Se algum campo em `config` for `false`, corrija os bindings correspondentes no Cloudflare.
+5. Acesse o aplicativo e faça uma recarga completa/limpe o cache do site. Teste o login, o calendário pessoal, uma sala, o Planejador, metas/hábitos e o seletor de aparência.
 
 ## Verificações locais
 
-Rode `npm test` e `npm run check` após aplicar os arquivos no projeto completo e com as dependências instaladas. A verificação local não significa que o ZIP foi enviado ao GitHub, implantado no Cloudflare ou testado contra o banco online; essas etapas dependem da publicação no seu ambiente.
+No ambiente de desenvolvimento, execute:
+
+```sh
+npm test
+npm run check
+```
+
+Nesta preparação, os testes automatizados passaram: **12 testes, 0 falhas**, e todos os arquivos JavaScript verificados passaram pelo parser do Node.
+
+## Importante
+
+Este pacote ainda não foi publicado no GitHub nem implantado no Cloudflare. A aplicação online só receberá a correção depois que os arquivos forem enviados e o Worker for publicado. Se o erro continuar após a publicação e a migração, consulte os logs do Worker no Cloudflare; não compartilhe as chaves do Supabase.
