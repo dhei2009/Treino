@@ -836,7 +836,7 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, 
   .st-home-text-button { font-size: 9px; }
   .st-home-hero-art { position: absolute; top: -30px; right: -60px; width: 180px; height: 180px; min-height: 0; opacity: .3; pointer-events: none; }
   .st-home-art-center { width: 58px; height: 58px; border-radius: 19px; }
-  .st-home-art-center span { font-size: 17px; }
+  .st-home-art-center img { width: 90%; height: 90%; }
   .st-home-art-center small { font-size: 5px; margin-top: -11px; }
   .st-home-float { display: none; }
   .st-home-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
@@ -1078,113 +1078,253 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, 
   .st-home-feature:hover, .st-life-item-card:hover { transform: translateY(-2px); }
   .settings-option:hover, .workspace-item:hover { transform: translateX(2px); }
 }
-/* Small screens: four primary tabs, with contextual sub-tabs above them. */
-.mobile-subnav { display: none; }
+/* Mobile navigation is a direct, horizontally scrollable set of page tabs. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+
+/* Shape Together polish: supplied mark, direct navigation, modal safety and responsive accent sync. */
+.brand-mark.brand-logo {
+  overflow: hidden !important;
+  border-radius: 50% !important;
+  padding: 0 !important;
+  background: #050505 !important;
+  box-shadow: 0 7px 18px color-mix(in srgb, var(--accent) 23%, transparent) !important;
+  flex: 0 0 auto;
+}
+.brand-mark.brand-logo > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+.auth-head .brand-mark.brand-logo { width: 54px; height: 54px; }
+.side-brand .brand-mark.brand-logo { width: 48px; height: 48px; }
+
+/* Seven direct navigation tabs on mobile. Swipe horizontally to reach every area. */
+.mobile-subnav { display: none !important; }
 @media (max-width: 980px) {
   .mobile-nav {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    grid-auto-flow: column;
+    display: flex !important;
+    grid-template-columns: none !important;
+    grid-auto-flow: unset !important;
     align-items: stretch;
-    min-height: 64px;
-    gap: 3px;
+    justify-content: flex-start;
+    gap: 5px;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 7px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    z-index: 100;
     padding: 6px;
-    border-radius: 19px;
-    background: color-mix(in srgb, var(--panel) 95%, transparent);
-    border-color: color-mix(in srgb, var(--line) 92%, transparent);
-    box-shadow: 0 10px 35px rgba(24, 37, 57, .14);
+    min-height: 69px;
+    border-radius: 20px;
   }
+  .mobile-nav::-webkit-scrollbar { display: none; }
   .mobile-nav .mobile-primary-tab {
-    --nav-color: var(--st-blue);
-    flex: 1 1 0;
-    min-width: 0;
-    min-height: 51px;
-    gap: 3px;
-    padding: 4px 1px;
-    border-radius: 12px;
-    font-size: 9px;
-    font-weight: 700;
-    white-space: nowrap;
-  }
-  .mobile-nav .mobile-primary-tab[data-mobile-group="organize"] { --nav-color: var(--st-violet); }
-  .mobile-nav .mobile-primary-tab[data-mobile-group="training"] { --nav-color: var(--st-green); }
-  .mobile-nav .mobile-primary-tab[data-mobile-group="spaces"] { --nav-color: var(--st-teal); }
-  .mobile-nav .mobile-primary-tab .icon {
-    width: 17px;
-    height: 17px;
-    box-sizing: content-box;
-    padding: 5px;
-    border-radius: 10px;
-    color: var(--nav-color);
-    background: color-mix(in srgb, var(--nav-color) 12%, var(--panel));
-    stroke-width: 1.9;
-  }
-  .mobile-nav .mobile-primary-tab.active {
-    background: color-mix(in srgb, var(--nav-color) 9%, var(--panel));
-    border-color: color-mix(in srgb, var(--nav-color) 21%, var(--line));
-    color: var(--text);
-  }
-  .mobile-nav .mobile-primary-tab.active .icon {
-    background: color-mix(in srgb, var(--nav-color) 19%, var(--panel));
-    stroke-width: 2.1;
-  }
-  .mobile-subnav:not(.hidden) {
-    position: fixed;
-    z-index: 99;
-    left: 50%;
-    bottom: calc(78px + max(12px, env(safe-area-inset-bottom, 0px)));
     display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 5px;
-    width: max-content;
-    max-width: calc(100vw - 24px);
-    min-height: 52px;
-    padding: 6px;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    border: 1px solid var(--line);
-    border-radius: 17px;
-    background: color-mix(in srgb, var(--panel) 96%, transparent);
-    box-shadow: 0 9px 26px rgba(24, 37, 57, .12);
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
-    transform: translateX(-50%);
-    animation: stSubnavAppear .18s var(--st-ease) both;
-    scrollbar-width: none;
-  }
-  .mobile-subnav::-webkit-scrollbar { display: none; }
-  .mobile-subnav.hidden { display: none !important; }
-  .mobile-subnav button {
-    flex: 0 0 auto;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    min-width: 0;
-    min-height: 37px;
-    padding: 0 12px;
+    width: auto;
+    min-width: 65px;
+    max-width: 95px;
+    min-height: 55px;
+    padding: 5px 9px;
+    scroll-snap-align: start;
     border: 1px solid transparent;
-    border-radius: 11px;
-    background: transparent;
+    border-radius: 14px;
     color: var(--muted);
-    font-size: 11px;
-    font-weight: 700;
+    background: transparent;
+    font-size: 10px;
+    line-height: 1.1;
+    font-weight: 750;
     white-space: nowrap;
+    transition: transform .18s var(--st-ease), color .18s ease, background .18s ease, border-color .18s ease;
   }
-  .mobile-subnav button .icon { width: 16px; height: 16px; color: var(--st-teal); }
-  .mobile-subnav button[data-subpage="life"] .icon { color: var(--st-violet); }
-  .mobile-subnav button[data-subpage="calendar"] .icon { color: var(--st-green); }
-  .mobile-subnav button[data-subpage="progress"] .icon { color: var(--st-rose); }
-  .mobile-subnav button[data-subpage="notes"] .icon { color: var(--st-amber); }
-  .mobile-subnav button.active { color: var(--text); background: color-mix(in srgb, var(--accent) 8%, var(--panel)); border-color: var(--line); }
-  .mobile-subnav button:active, .mobile-nav .mobile-primary-tab:active { transform: scale(.97); }
-  .page { padding-bottom: 154px; }
+  .mobile-nav .mobile-primary-tab .icon {
+    width: 19px;
+    height: 19px;
+    color: var(--nav-color, var(--accent));
+    stroke-width: 1.85;
+    transition: transform .18s var(--st-ease);
+  }
+  .mobile-nav .mobile-primary-tab.active {
+    color: var(--nav-color, var(--accent));
+    background: color-mix(in srgb, var(--nav-color, var(--accent)) 12%, var(--panel));
+    border-color: color-mix(in srgb, var(--nav-color, var(--accent)) 23%, var(--line));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nav-color, var(--accent)) 5%, transparent);
+  }
+  .mobile-nav .mobile-primary-tab.active .icon { transform: translateY(-1px); stroke-width: 2.1; }
+  .mobile-nav .mobile-primary-tab:active { transform: scale(.96); }
+  .page { padding-bottom: max(126px, calc(108px + env(safe-area-inset-bottom))); }
 }
-@keyframes stSubnavAppear { from { opacity: 0; transform: translate(-50%, 5px); } to { opacity: 1; transform: translate(-50%, 0); } }
 @media (max-width: 390px) {
-  .mobile-nav .mobile-primary-tab { font-size: 8.5px; }
-  .mobile-subnav button { padding: 0 10px; gap: 5px; font-size: 10px; }
+  .mobile-nav { gap: 3px; padding: 5px; }
+  .mobile-nav .mobile-primary-tab { min-width: 62px; padding: 5px 7px; font-size: 9px; }
+  .mobile-nav .mobile-primary-tab .icon { width: 18px; height: 18px; }
+}
+
+/* The day sheet must always sit above the fixed navigation bar on phones. */
+.sheet-back { z-index: 160 !important; }
+.sheet {
+  max-height: min(88vh, 740px);
+  max-height: min(88dvh, 740px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: max(17px, env(safe-area-inset-bottom));
+}
+.sheet-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding-top: 10px;
+  padding-bottom: 2px;
+  background: var(--panel);
+}
+body.day-sheet-open #mobileNav,
+body.day-sheet-open #mobileSubnav {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+}
+
+/* Show immediate, accessible feedback while an account switches workspace. */
+.workspace-trigger[aria-busy="true"] { cursor: progress; opacity: .92; }
+.workspace-trigger[aria-busy="true"] .workspace-trigger-copy b { color: var(--accentStrong); }
+.workspace-loading-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--accentLine);
+  border-top-color: var(--accentStrong);
+  border-radius: 50%;
+  animation: stWorkspaceSpin .7s linear infinite;
+}
+.workspace-trigger-chevron .workspace-loading-dot { width: 10px; height: 10px; }
+@keyframes stWorkspaceSpin { to { transform: rotate(360deg); } }
+
+/* The help control remains discreet, but has a gentle idle animation. */
+.st-help-trigger.st-help-top-trigger {
+  animation: stHelpBreath 5s ease-in-out infinite;
+  transform-origin: center;
+}
+.st-help-trigger.st-help-top-trigger:hover {
+  animation-play-state: paused;
+  transform: translateY(-1px) scale(1.04) !important;
+}
+.st-help-top-trigger .st-help-mark .icon { transition: transform .24s ease; }
+.st-help-trigger.st-help-top-trigger:hover .st-help-mark .icon { transform: rotate(-7deg); }
+@keyframes stHelpBreath {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); }
+  50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 9%, transparent); }
+}
+
+/* Larger release dialog; the content remains independently scrollable. */
+.st-release-dialog {
+  width: min(820px, calc(100vw - 36px)) !important;
+  max-height: min(90vh, 820px) !important;
+  max-height: min(90dvh, 820px) !important;
+}
+.st-release-heading {
+  grid-template-columns: 92px minmax(0, 1fr) !important;
+  gap: 19px !important;
+}
+.st-release-mark-image {
+  width: 92px !important;
+  height: 92px !important;
+  border-radius: 50% !important;
+  object-fit: cover !important;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line)) !important;
+  background: #050505 !important;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--accent) 17%, transparent) !important;
+}
+.st-release-title { font-size: clamp(22px, 3.3vw, 30px) !important; }
+.st-release-subtitle { font-size: 13px !important; }
+.st-release-content {
+  max-height: min(58vh, 510px) !important;
+  max-height: min(58dvh, 510px) !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.st-release-item { grid-template-columns: 42px minmax(0, 1fr) !important; gap: 14px !important; padding: 15px !important; }
+.st-release-item-icon { width: 40px !important; height: 40px !important; border-radius: 13px !important; }
+.st-release-item-icon .icon { width: 21px !important; height: 21px !important; }
+.st-release-item-title { font-size: 14px !important; }
+.st-release-item-desc { font-size: 12px !important; line-height: 1.6 !important; }
+.st-release-footer { padding: 15px 23px 18px !important; }
+.st-release-allgood p { font-size: 11px !important; }
+.st-release-continue { min-height: 45px !important; font-size: 13px !important; }
+@media (max-width: 600px) {
+  .brand-mark.brand-logo { width: 45px; height: 45px; }
+  .st-release-dialog {
+    width: calc(100vw - 16px) !important;
+    max-height: calc(94vh - env(safe-area-inset-bottom)) !important;
+    max-height: calc(94dvh - env(safe-area-inset-bottom)) !important;
+    border-radius: 22px !important;
+  }
+  .st-release-top { padding: 18px 17px 14px !important; }
+  .st-release-heading { grid-template-columns: 76px minmax(0, 1fr) !important; gap: 13px !important; }
+  .st-release-mark-image { width: 76px !important; height: 76px !important; }
+  .st-release-title { font-size: 22px !important; }
+  .st-release-content { max-height: 58dvh !important; padding: 10px 16px 13px !important; }
+  .st-release-item { grid-template-columns: 36px minmax(0,1fr) !important; gap: 10px !important; padding: 12px !important; }
+  .st-release-item-icon { width: 34px !important; height: 34px !important; }
+  .st-release-item-title { font-size: 13px !important; }
+  .st-release-item-desc { font-size: 11.5px !important; }
+  .st-release-footer { padding: 13px 17px max(14px, env(safe-area-inset-bottom)) !important; }
 }
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  .st-help-trigger.st-help-top-trigger,
+  .workspace-loading-dot { animation: none !important; }
+}
+
+
+/* The release notes intentionally use most of the available screen, with only the list scrolling. */
+.st-release-dialog {
+  width: min(920px, calc(100vw - 32px)) !important;
+  height: min(88dvh, 820px) !important;
+  min-height: min(76dvh, 640px) !important;
+  max-height: min(94dvh, 880px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+.st-release-top { flex: 0 0 auto !important; }
+.st-release-heading { grid-template-columns: 104px minmax(0, 1fr) !important; gap: 22px !important; }
+.st-release-mark-image { width: 104px !important; height: 104px !important; }
+.st-release-content {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.st-release-footer { flex: 0 0 auto !important; }
+@media (max-width: 600px) {
+  .st-release-dialog {
+    width: calc(100vw - 14px) !important;
+    height: min(92dvh, 900px) !important;
+    min-height: min(80dvh, 580px) !important;
+    max-height: calc(96dvh - env(safe-area-inset-bottom)) !important;
+    border-radius: 23px !important;
+  }
+  .st-release-heading { grid-template-columns: 82px minmax(0, 1fr) !important; gap: 14px !important; }
+  .st-release-mark-image { width: 82px !important; height: 82px !important; }
+  .st-release-top { padding: 17px 16px 14px !important; }
+  .st-release-content { padding: 12px 16px 16px !important; }
+}
+@media (max-height: 560px) {
+  .st-release-dialog { height: calc(96dvh - 12px) !important; min-height: 0 !important; }
+  .st-release-heading { grid-template-columns: 62px minmax(0, 1fr) !important; }
+  .st-release-mark-image { width: 62px !important; height: 62px !important; }
 }
